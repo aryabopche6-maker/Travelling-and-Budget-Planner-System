@@ -1,0 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* ──────────────────────────────────────────────────────────────────────────
+   WANDERPLAN DESIGN TOKENS
+   Cinematic Travel Theme
+────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand palette */
+  --color-primary:  #0F766E;
+  --color-bright:   #14B8A6;
+  --color-coral:    #FF6B4A;
+  --color-golden:   #F4B942;
+  --color-green:    #4F8A5B;
+  --color-charcoal: #172B2F;
+  --color-bg: #EEF8FC;
+  --color-white:    #FFFFFF;
+  --color-muted:    #66777A;
+  --color-danger:   #DC5C5C;
+
+  /* Legacy aliases (point to new tokens for backwards compatibility) */
+  --color-ocean:    var(--color-charcoal);
+  --color-teal:     var(--color-primary);
+  --color-sunset:   var(--color-coral);
+  --color-sage:     var(--color-green);
+  --color-dune:     var(--color-bg);
+  --color-sky:      #EAF1F0;
+  
+  --color-text:     var(--color-charcoal);
+  --color-border:   rgba(23, 43, 47, 0.08);
+}
+
+/* ── Base ── */
+@layer base {
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    @apply antialiased;
+    color: black;
+    background: #89C8E2;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Reveal body gradient through layout wrappers */
+  .min-h-screen.bg-bg,
+  .h-screen.bg-bg,
+  main.bg-bg {
+    background-color: transparent !important;
+  }
+
+  h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(23,43,47,0.15); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(23,43,47,0.3); }
+}
+
+/* ── Utilities ── */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Premium Background Effects */
+  .bg-radial-teal {
+    background: radial-gradient(circle at 20% 20%, rgba(20,184,166,0.06), transparent 45%);
+  }
+  .bg-radial-coral {
+    background: radial-gradient(circle at 80% 80%, rgba(255,107,74,0.04), transparent 45%);
+  }
+
+  /* Travel hero overlay */
+  .hero-overlay {
+    background: linear-gradient(to bottom, rgba(23,43,47,0.1) 0%, rgba(23,43,47,0.4) 50%, rgba(23,43,47,0.85) 100%);
+  }
+
+  /* Destination card overlay */
+  .dest-overlay {
+    background: linear-gradient(to bottom, transparent 30%, rgba(23,43,47,0.65) 100%);
+  }
+
+  /* Text shadow for legibility on photography */
+  .text-shadow { text-shadow: 0 2px 12px rgba(23,43,47,0.45); }
+  .text-shadow-sm { text-shadow: 0 1px 6px rgba(23,43,47,0.35); }
+  .text-shadow-lg { text-shadow: 0 4px 24px rgba(23,43,47,0.6); }
+
+  /* Premium card */
+  .card-travel {
+    background: white;
+    border: 1px solid rgba(23,43,47,0.08);
+    box-shadow: 0 4px 24px rgba(23,43,47,0.04);
+    border-radius: 1.25rem;
+  }
+
+  /* Hover lift */
+  .hover-lift {
+    transition: transform 0.3s cubic-bezier(0.25,0.1,0.25,1), box-shadow 0.3s cubic-bezier(0.25,0.1,0.25,1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 40px rgba(23,43,47,0.08);
+  }
+
+  /* Button Shine Effect */
+  .btn-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.15), transparent);
+    transform: rotate(30deg) translateX(-100%);
+    transition: transform 0.6s cubic-bezier(0.25,0.1,0.25,1);
+  }
+  .btn-shine:hover::after {
+    transform: rotate(30deg) translateX(100%);
+  }
+
+  /* Image zoom container */
+  .img-zoom-wrap { overflow: hidden; }
+  .img-zoom-wrap img, .img-zoom-wrap .zoom-target {
+    transition: transform 0.6s cubic-bezier(0.25,0.1,0.25,1);
+  }
+  .img-zoom-wrap:hover img, .img-zoom-wrap:hover .zoom-target {
+    transform: scale(1.06);
+  }
+}
+
+
+
+
+.bg-travel-budget {
+  background-color: #EEF8F6;
+  background-image: linear-gradient(180deg, #F7FBFA 0%, #EEF8F6 100%);
+}
+
+.bg-travel-neutral {
+  background-color: #F2F7F6;
+}
+
+/* Subtle Topographic Pattern */
+.bg-topo-pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c13.866 0 25.362 11.238 27.275 25.105 1.543 11.18 8.04 20.316 17.584 25.112C63.633 72.138 72.936 78 84 78c1.657 0 3 1.343 3 3s-1.343 3-3 3c-12.782 0-23.39-6.702-32.062-17.152-8.31-10.038-12.872-20.94-14.71-33.805C35.918 20.61 24.814 11 11 11c-1.657 0-3-1.343-3-3s1.343-3 3-3z' fill='%230F766E' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-size: 400px 400px;
+}
+
+.bg-route-pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 30l20-20M10 50l20-20' stroke='%2314B8A6' stroke-width='2' stroke-dasharray='4 4' fill='none'/%3E%3Ccircle cx='30' cy='30' r='3' fill='%23FF6B4A'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+.bg-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(23,43,47,0.3) 0%, rgba(23,43,47,0.7) 100%);
+  pointer-events: none;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   ATMOSPHERIC BACKGROUND ANIMATIONS
+────────────────────────────────────────────────────────────────────────── */
+
+/* 1. Ambient Gradients */
+@keyframes ambient-shift {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3vw, -4vh) scale(1.05); }
+  66% { transform: translate(-2vw, 3vh) scale(0.95); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.animate-ambient {
+  animation: ambient-shift 20s infinite ease-in-out;
+  will-change: transform;
+}
+
+.animate-ambient-fast {
+  animation: ambient-shift 14s infinite ease-in-out reverse;
+  will-change: transform;
+}
+
+/* 2. Flowing Ocean Waves */
+@keyframes wave-flow {
+  0% { transform: translateX(0) scaleY(1); opacity: 0.04; }
+  50% { transform: translateX(-2%) scaleY(1.05); opacity: 0.08; }
+  100% { transform: translateX(0) scaleY(1); opacity: 0.04; }
+}
+
+.animate-wave {
+  animation: wave-flow 25s infinite ease-in-out;
+  will-change: transform, opacity;
+}
+
+/* 3. Floating Light Particles */
+@keyframes particle-drift {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  20% { opacity: 0.35; }
+  80% { opacity: 0.35; }
+  100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
+}
+
+.animate-particle {
+  animation: particle-drift 12s infinite linear;
+  will-change: transform, opacity;
+}
+
+/* 4. Travel Route Animation */
+@keyframes route-dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.animate-route {
+  animation: route-dash 10s infinite linear;
+  stroke-dasharray: 6 8;
+}
+
+/* 5. Cloud Drift */
+@keyframes cloud-drift {
+  0% { transform: translateX(-5%); opacity: 0.15; }
+  50% { transform: translateX(5%); opacity: 0.3; }
+  100% { transform: translateX(-5%); opacity: 0.15; }
+}
+
+.animate-cloud {
+  animation: cloud-drift 35s infinite ease-in-out;
+  will-change: transform, opacity;
+}
+
+/* 6. Sun Glow Pan */
+@keyframes sun-pan {
+  0% { transform: translate(0, 0); opacity: 0.3; }
+  50% { transform: translate(10vw, 5vh); opacity: 0.5; }
+  100% { transform: translate(0, 0); opacity: 0.3; }
+}
+
+.animate-sun {
+  animation: sun-pan 20s infinite ease-in-out;
+  will-change: transform, opacity;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ambient, .animate-ambient-fast, .animate-wave, .animate-particle, .animate-route, .animate-cloud, .animate-sun {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Section Overlay (Final CTA Cinematic) */
+.cinematic-overlay {
+  background: linear-gradient(135deg, rgba(23,43,47,0.7) 0%, rgba(23,43,47,0.4) 100%);
+}
