@@ -1,0 +1,66 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: wanderplan-backend
+
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/wanderplandb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:aryabopche24@gmail.com}
+    password: ${MAIL_PASSWORD:ngurwnqhpuaqbryu}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-ms: 86400000 # 24 hours
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+  invitation:
+    expiry-days: 7
+  cors:
+    allowed-origins: ${CORS_ORIGIN:http://localhost:5173}
+  external:
+    weather:
+      api-key: ${WEATHER_API_KEY:NO_KEY}
+    places:
+      api-key: ${PLACES_API_KEY:NO_KEY}
+    hotels:
+      api-key: ${HOTEL_API_KEY:NO_KEY}
+      client-id: ${AMADEUS_CLIENT_ID:NO_KEY}
+      client-secret: ${AMADEUS_CLIENT_SECRET:NO_KEY}
+  upload:
+    dir: uploads

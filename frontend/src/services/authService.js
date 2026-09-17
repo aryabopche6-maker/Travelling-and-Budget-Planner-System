@@ -1,45 +1,42 @@
 // src/services/authService.js
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock User Database
-const mockUser = {
-  id: '1',
-  name: 'Alex Traveler',
-  email: 'alex@example.com',
-  token: 'mock-jwt-token-12345'
-};
+import api from './api';
 
 export const authService = {
   login: async (email, password) => {
-    await delay(1000);
-    if (email && password) {
-      localStorage.setItem('auth_token', mockUser.token);
-      return mockUser;
+    const response = await api.post('/auth/login', { email, password });
+    if (response.data?.data?.token) {
+      localStorage.setItem('token', response.data.data.token);
+      localStorage.setItem('auth_token', response.data.data.token);
+      return response.data.data;
     }
-    throw new Error("Invalid credentials");
+    throw new Error(response.data?.message || "Invalid credentials");
   },
 
-  signup: async (name, email, password) => {
-    await delay(1000);
-    if (name && email && password) {
-      localStorage.setItem('auth_token', mockUser.token);
-      return { ...mockUser, name, email };
+  signup: async (name, email, password, phone = "") => {
+    const response = await api.post('/auth/signup', { name, email, password, confirmPassword: password, phone });
+    if (response.data?.data?.token) {
+      localStorage.setItem('token', response.data.data.token);
+      localStorage.setItem('auth_token', response.data.data.token);
+      return response.data.data;
     }
-    throw new Error("Invalid data");
+    throw new Error(response.data?.message || "Registration failed");
   },
 
   logout: async () => {
-    await delay(300);
+    localStorage.removeItem('token');
     localStorage.removeItem('auth_token');
   },
 
   getCurrentUser: async () => {
-    await delay(500);
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      return mockUser;
+    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+    if (!token) return null;
+    try {
+      const response = await api.get('/users/me');
+      return response.data?.data || null;
+    } catch (error) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_token');
+      return null;
     }
-    return null;
   }
 };

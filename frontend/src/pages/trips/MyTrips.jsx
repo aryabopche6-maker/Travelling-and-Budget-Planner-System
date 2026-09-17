@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, MapPin } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/common/Button';
 import TripCard from '../../components/common/TripCard';

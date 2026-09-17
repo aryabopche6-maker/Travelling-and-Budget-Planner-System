@@ -1,17 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTrip } from '../../context/TripContext';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BadgeIndianRupee, Receipt, Plus, AlertCircle, Check, X,
   ArrowUpRight, ArrowDownLeft, Users, Wallet, Filter, Trash2,
-  ChevronDown, IndianRupee
+  ChevronDown, IndianRupee, Upload, FileImage, Eye, Loader2
 } from 'lucide-react';
 import Button from '../../components/common/Button';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Reveal from '../../components/animations/Reveal';
 import AnimatedNumber from '../../components/animations/AnimatedNumber';
+import { expenseService } from '../../services/expenseService';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const SPLIT_TYPES = ['EQUAL', 'CUSTOM'];
@@ -110,7 +111,10 @@ function computeBalances(expenses, currentUserId, members) {
 }
 
 // ─── Add Expense Modal ────────────────────────────────────────────────────────
-function AddExpenseModal({ members, currentUser, onAdd, onClose }) {
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+const MAX_SIZE_MB = 5;
+
+function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
   const [form, setForm] = useState({
     title: '',
     amount: '',
@@ -121,6 +125,10 @@ function AddExpenseModal({ members, currentUser, onAdd, onClose }) {
     disputeReason: '',
   });
   const [error, setError] = useState('');
+  const [proofFile, setProofFile] = useState(null);
+  const [proofPreviewUrl, setProofPreviewUrl] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedProofIdentifier, setUploadedProofIdentifier] = useState(null);
 
   const set = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
@@ -133,11 +141,63 @@ function AddExpenseModal({ members, currentUser, onAdd, onClose }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleFileSelect = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Only image files (JPG, PNG, GIF, WEBP) or PDF are allowed.');
+      return;
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setError(`File size must be under ${MAX_SIZE_MB}MB.`);
+      return;
+    }
+    setError('');
+    setProofFile(file);
+    // Show local preview for images
+    if (file.type.startsWith('image/')) {
+      setProofPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setProofPreviewUrl(null); // PDF — no inline preview
+    }
+    setUploadedProofIdentifier(null); // reset if re-selecting
+  }, []);
+
+  const handleUpload = async () => {
+    if (!proofFile) return;
+    try {
+      setIsUploading(true);
+      setError('');
+      const identifier = await expenseService.uploadProof(tripId, proofFile);
+      setUploadedProofIdentifier(identifier);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return setError('Please enter a title.');
     if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) return setError('Enter a valid amount.');
     if (form.participants.length === 0) return setError('Select at least one participant.');
+    // If user selected a file but hasn't uploaded, upload now
+    let proofIdentifier = uploadedProofIdentifier;
+    if (proofFile && !proofIdentifier) {
+      try {
+        setIsUploading(true);
+        setError('');
+        proofIdentifier = await expenseService.uploadProof(tripId, proofFile);
+        setUploadedProofIdentifier(proofIdentifier);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Upload failed. Please try again.');
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
 
     const payer = members.find(m => m.id === form.paidById);
     onAdd({
@@ -151,6 +211,7 @@ function AddExpenseModal({ members, currentUser, onAdd, onClose }) {
       splitType: form.splitType,
       participants: form.participants,
       disputeReason: '',
+      proofUrl: proofIdentifier || null,
     });
     onClose();
   };
@@ -297,9 +358,58 @@ function AddExpenseModal({ members, currentUser, onAdd, onClose }) {
             )}
           </div>
 
+          {/* ── Upload Proof ── */}
+          <div>
+            <label className="block text-sm font-semibold text-charcoal mb-1.5">
+              Payment Proof <span className="text-muted font-normal">(optional · image or PDF · max 5 MB)</span>
+            </label>
+            <div className="border-2 border-dashed border-muted/30 rounded-xl p-4 text-center hover:border-teal/40 transition-colors cursor-pointer relative">
+              <input
+                id="proof-upload"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={handleFileSelect}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+              {proofPreviewUrl ? (
+                <img src={proofPreviewUrl} alt="Proof preview" className="max-h-32 mx-auto rounded-lg object-contain" />
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-2">
+                  <div className="w-10 h-10 bg-muted/10 rounded-full flex items-center justify-center">
+                    <FileImage className="w-5 h-5 text-muted" />
+                  </div>
+                  <p className="text-sm text-muted">
+                    {proofFile ? (
+                      <span className="text-teal font-semibold">{proofFile.name}</span>
+                    ) : (
+                      <>Click to upload receipt / screenshot<br /><span className="text-xs">JPG, PNG, PDF up to 5MB</span></>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+            {proofFile && !uploadedProofIdentifier && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleUpload}
+                isLoading={isUploading}
+                className="mt-2 w-full border-teal/30 text-teal hover:bg-teal/5 text-sm gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                {isUploading ? 'Uploading...' : 'Upload Proof Now'}
+              </Button>
+            )}
+            {uploadedProofIdentifier && (
+              <p className="mt-2 text-xs font-semibold text-teal flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> Proof uploaded successfully
+              </p>
+            )}
+          </div>
+
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" className="flex-1 bg-success hover:bg-green-600 text-white">
+            <Button type="submit" isLoading={isUploading} className="flex-1 bg-success hover:bg-green-600 text-white">
               <Plus className="w-4 h-4 mr-1" /> Add Expense
             </Button>
           </div>
@@ -421,6 +531,71 @@ function SettleUpModal({ details, members, onSettle, onClose }) {
   );
 }
 
+// ─── Proof Preview Modal ──────────────────────────────────────────────────────
+function ProofPreviewModal({ tripId, expense, onClose }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+
+  React.useEffect(() => {
+    let objectUrl;
+    expenseService.getProofBlobUrl(tripId, expense.id)
+      .then(url => { objectUrl = url; setBlobUrl(url); })
+      .catch(() => setErr('Could not load proof. You may not be authorized, or the file was removed.'))
+      .finally(() => setLoading(false));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [tripId, expense.id]);
+
+  const isPdf = expense.proofUrl?.toLowerCase().endsWith('.pdf');
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-3xl shadow-2xl border border-muted/30 w-full max-w-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-muted/20 bg-bg/50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-teal/10 rounded-xl flex items-center justify-center border border-teal/20">
+              <Eye className="w-4 h-4 text-teal" />
+            </div>
+            <div>
+              <h3 className="font-bold text-charcoal">Payment Proof</h3>
+              <p className="text-xs text-muted">{expense.title}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-bg flex items-center justify-center transition-colors">
+            <X className="w-4 h-4 text-muted" />
+          </button>
+        </div>
+        <div className="p-6 min-h-[200px] flex items-center justify-center">
+          {loading && <Loader2 className="w-8 h-8 animate-spin text-teal" />}
+          {err && <p className="text-red-400 text-sm text-center">{err}</p>}
+          {blobUrl && !loading && (
+            isPdf ? (
+              <iframe src={blobUrl} title="Proof PDF" className="w-full h-96 rounded-xl border border-muted/20" />
+            ) : (
+              <img src={blobUrl} alt="Payment proof" className="max-h-96 max-w-full rounded-xl object-contain shadow-lg" />
+            )
+          )}
+        </div>
+        {blobUrl && (
+          <div className="px-6 pb-5 flex justify-end">
+            <a href={blobUrl} download={`proof-${expense.id}`}
+               className="text-sm font-semibold text-teal hover:underline">⬇ Download Proof</a>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const FILTER_TABS = ['ALL', 'PENDING', 'DISPUTED', 'SETTLED'];
 
@@ -436,6 +611,7 @@ export default function SplitSmart() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [disputeTarget, setDisputeTarget] = useState(null);
   const [showSettleModal, setShowSettleModal] = useState(false);
+  const [proofViewTarget, setProofViewTarget] = useState(null);
 
   // ── balance calculation ──────────────────────────────────────────────────
   const { totalOwed, totalOwing, details: balanceDetails } = useMemo(
@@ -748,7 +924,16 @@ export default function SplitSmart() {
 
                       {/* Pending actions */}
                       {exp.status === 'PENDING' && (canApprove || canDispute) && (
-                        <div className="bg-bg/50 px-5 py-4 border-t border-muted/30 flex gap-3 justify-end">
+                        <div className="bg-bg/50 px-5 py-4 border-t border-muted/30 flex flex-wrap gap-3 justify-end">
+                          {exp.proofUrl && (
+                            <Button
+                              variant="ghost"
+                              onClick={() => setProofViewTarget(exp)}
+                              className="text-teal hover:bg-teal/10 gap-1.5"
+                            >
+                              <Eye className="w-4 h-4" /> View Proof
+                            </Button>
+                          )}
                           {canDispute && (
                             <Button
                               variant="ghost"
@@ -768,6 +953,19 @@ export default function SplitSmart() {
                           )}
                         </div>
                       )}
+
+                      {/* Proof button for accepted/settled expenses */}
+                      {(exp.status === 'ACCEPTED' || exp.status === 'SETTLED') && exp.proofUrl && (
+                        <div className="bg-bg/30 px-5 py-3 border-t border-muted/20 flex justify-end">
+                          <Button
+                            variant="ghost"
+                            onClick={() => setProofViewTarget(exp)}
+                            className="text-teal hover:bg-teal/10 text-sm gap-1.5"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View Proof
+                          </Button>
+                        </div>
+                      )}
                     </Card>
                   </motion.div>
                 );
@@ -782,6 +980,7 @@ export default function SplitSmart() {
         {showAddModal && (
           <AddExpenseModal
             members={members}
+            tripId={trip?.id}
             currentUser={{ id: currentUserId, name: currentUserName }}
             onAdd={addExpense}
             onClose={() => setShowAddModal(false)}
@@ -800,6 +999,13 @@ export default function SplitSmart() {
             members={members}
             onSettle={settleWithPeople}
             onClose={() => setShowSettleModal(false)}
+          />
+        )}
+        {proofViewTarget && (
+          <ProofPreviewModal
+            tripId={trip?.id}
+            expense={proofViewTarget}
+            onClose={() => setProofViewTarget(null)}
           />
         )}
       </AnimatePresence>

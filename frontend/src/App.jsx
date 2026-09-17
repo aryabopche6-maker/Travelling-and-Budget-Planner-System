@@ -7,6 +7,7 @@ import { ToastProvider } from './context/ToastContext';
 import LandingPage from './pages/landing/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
+import InvitationLanding from './pages/trips/InvitationLanding';
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -58,6 +59,7 @@ function AppRoutes() {
       <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+      <Route path="/invitations/:action" element={<InvitationLanding />} />
       
       {/* Main App Layout */}
       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

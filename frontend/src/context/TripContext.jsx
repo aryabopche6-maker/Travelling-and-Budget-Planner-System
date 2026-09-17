@@ -43,7 +43,7 @@ export const TripProvider = ({ children }) => {
     };
   }, [tripId]);
 
-  const isTripAdmin = trip?.members?.find(m => m.id === user?.id)?.role === 'TRIP_ADMIN';
+  const isTripAdmin = trip?.members?.find(m => m.userId === user?.id)?.role === 'TRIP_ADMIN';
 
   if (isLoading) {
     return <div className="h-full flex items-center justify-center text-teal">Loading Trip...</div>;

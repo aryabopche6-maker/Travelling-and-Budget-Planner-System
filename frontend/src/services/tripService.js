@@ -1,85 +1,75 @@
 // src/services/tripService.js
-
-// Mock centralized data store
-let mockTrips = [
-  {
-    id: 't1',
-    destination: 'Paris, France',
-    startingLocation: 'New York, USA',
-    startDate: '2024-05-10',
-    endDate: '2024-05-20',
-    budget: 200000,
-    spent: 180000,
-    travelMode: 'flight',
-    status: 'upcoming',
-    createdBy: '1',
-    members: [
-      { id: '1', name: 'Traveler (You)', role: 'TRIP_ADMIN' }
-    ]
-  },
-  {
-    id: 't2',
-    destination: 'Tokyo, Japan',
-    startingLocation: 'San Francisco, USA',
-    startDate: '2024-10-05',
-    endDate: '2024-10-15',
-    budget: 300000,
-    spent: 0,
-    travelMode: 'flight',
-    status: 'planning',
-    createdBy: '1',
-    members: [
-      { id: '1', name: 'Traveler (You)', role: 'TRIP_ADMIN' },
-      { id: '2', name: 'Jane Smith', role: 'TRAVELER' }
-    ]
-  },
-  {
-    id: 't3',
-    destination: 'Bali, Indonesia',
-    startingLocation: 'Mumbai, India',
-    startDate: '2024-06-01',
-    endDate: '2024-06-10',
-    budget: 150000,
-    spent: 45000,
-    travelMode: 'flight',
-    status: 'upcoming',
-    createdBy: '2', 
-    members: [
-      { id: '1', name: 'Traveler (You)', role: 'TRIP_ADMIN' }, 
-      { id: '2', name: 'Jane Smith', role: 'TRAVELER' }
-    ]
-  }
-];
-
-// Helper to simulate network latency
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+import api from './api';
 
 export const tripService = {
-  getMyTrips: async (userId) => {
-    await delay(600);
-    return mockTrips.filter(t => t.members.some(m => m.id === userId));
+  getMyTrips: async () => {
+    try {
+      const response = await api.get('/trips');
+      return response.data?.data || [];
+    } catch (error) {
+      console.error("Error fetching trips:", error);
+      return [];
+    }
+  },
+  
+  getPlaces: async (tripId, location, radius) => {
+    let url = `/trips/${tripId}/places`;
+    if (location || radius) {
+      const params = new URLSearchParams();
+      if (location) params.append('location', location);
+      if (radius) params.append('radius', radius);
+      url += `?${params.toString()}`;
+    }
+    const response = await api.get(url);
+    return response.data?.data;
+  },
+
+  getHotels: async (tripId, location, radius) => {
+    let url = `/trips/${tripId}/hotels`;
+    if (location || radius) {
+      const params = new URLSearchParams();
+      if (location) params.append('location', location);
+      if (radius) params.append('radius', radius);
+      url += `?${params.toString()}`;
+    }
+    const response = await api.get(url);
+    return response.data?.data;
   },
   
   getTrip: async (tripId) => {
-    await delay(600);
-    const trip = mockTrips.find(t => t.id === tripId);
-    if (!trip) throw new Error("Trip not found");
-    return trip;
+    const response = await api.get(`/trips/${tripId}`);
+    if (!response.data?.data) throw new Error("Trip not found");
+    return response.data.data;
   },
 
-  createTrip: async (tripData, userId, userName) => {
-    await delay(1000);
-    const newTrip = {
-      id: `t${Date.now()}`,
-      ...tripData,
-      spent: 0,
-      status: 'planning',
-      createdBy: userId,
-      members: [
-        { id: userId, name: userName || 'You', role: 'TRIP_ADMIN' }
-      ]
-    };
-    mockTrips.push(newTrip);
-    return newTrip;
+  createTrip: async (tripData) => {
+    const response = await api.post('/trips', tripData);
+    return response.data?.data;
+  },
+
+  updateTrip: async (tripId, tripData) => {
+    const response = await api.put(`/trips/${tripId}`, tripData);
+    return response.data?.data;
+  },
+
+  deleteTrip: async (tripId) => {
+    const response = await api.delete(`/trips/${tripId}`);
+    return response.data;
+  },
+
+  // Invitation methods
+  inviteMember: async (tripId, email) => {
+    const response = await api.post(`/trips/${tripId}/invitations`, { email });
+    return response.data;
+  },
+
+  getInvitations: async (tripId) => {
+    const response = await api.get(`/trips/${tripId}/invitations`);
+    return response.data?.data || [];
+  },
+
+  deleteInvitation: async (tripId, invitationId) => {
+    const response = await api.delete(`/trips/${tripId}/invitations/${invitationId}`);
+    return response.data;
   }
 };

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTrip } from '../../context/TripContext';
-import { Users, Mail, UserMinus, Shield, Plus, Crown } from 'lucide-react';
+import { Users, Mail, UserMinus, Shield, Plus, Crown, Clock, X } from 'lucide-react';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { motion } from 'framer-motion';
+import { tripService } from '../../services/tripService';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 
@@ -11,16 +12,58 @@ export default function GroupMembers() {
   const { trip, isTripAdmin } = useTrip(); // Use isTripAdmin
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
+  const [invitations, setInvitations] = useState([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
 
-  const handleInvite = (e) => {
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (trip?.id && isTripAdmin) {
+      loadInvitations();
+    }
+  }, [trip?.id, isTripAdmin]);
+
+  const loadInvitations = async () => {
+    try {
+      setIsLoadingInvites(true);
+      const data = await tripService.getInvitations(trip.id);
+      setInvitations(data);
+    } catch (error) {
+      console.error("Failed to load invitations", error);
+    } finally {
+      setIsLoadingInvites(false);
+    }
+  };
+
+  const handleInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail) return;
-    setIsInviting(true);
-    setTimeout(() => {
-      setIsInviting(false);
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      setIsInviting(true);
+      await tripService.inviteMember(trip.id, inviteEmail);
+      setSuccessMsg(`Invitation sent successfully to ${inviteEmail}!`);
       setInviteEmail('');
-      // Show toast ideally
-    }, 1000);
+      loadInvitations(); // Reload list
+      setTimeout(() => setSuccessMsg(''), 5000);
+    } catch (error) {
+      console.error("Failed to send invite", error);
+      setErrorMsg(error.response?.data?.message || "Failed to send invitation.");
+      setTimeout(() => setErrorMsg(''), 5000);
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleCancelInvite = async (invitationId) => {
+    try {
+      await tripService.deleteInvitation(trip.id, invitationId);
+      loadInvitations(); // Reload list
+    } catch (error) {
+      console.error("Failed to cancel invitation", error);
+    }
   };
 
   return (
@@ -61,6 +104,16 @@ export default function GroupMembers() {
               <Mail className="w-4 h-4" /> Send Invite
             </Button>
           </form>
+          {successMsg && (
+            <div className="mt-4 p-3 bg-teal/10 border border-teal/20 text-teal rounded-lg text-sm font-medium">
+              {successMsg}
+            </div>
+          )}
+          {errorMsg && (
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-600 rounded-lg text-sm font-medium">
+              {errorMsg}
+            </div>
+          )}
         </Card>
       )}
 
@@ -105,6 +158,45 @@ export default function GroupMembers() {
           ))}
         </div>
       </Card>
+
+      {isTripAdmin && invitations.length > 0 && (
+        <Card className="p-0 overflow-hidden border-muted/30 bg-white shadow-sm mt-8">
+          <div className="p-6 md:p-8 border-b border-muted/30 bg-bg">
+            <h3 className="text-xl font-bold text-charcoal">Pending Invitations <span className="text-muted font-medium ml-2">({invitations.length})</span></h3>
+          </div>
+          <div className="divide-y divide-muted">
+            {invitations.map((invitation, index) => (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                key={invitation.id} 
+                className="p-6 flex items-center justify-between hover:bg-bg/50 transition-colors group"
+              >
+                <div className="flex items-center gap-4 md:gap-6">
+                  <div className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center font-bold text-lg md:text-xl shadow-inner border-2 bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg text-charcoal flex items-center gap-2">
+                      {invitation.invitedEmail}
+                    </p>
+                    <p className="text-sm font-medium text-muted mt-0.5 tracking-wide uppercase">{invitation.status}</p>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={() => handleCancelInvite(invitation.id)}
+                  variant="ghost" 
+                  className="text-red-400 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent gap-2 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                >
+                  <X className="w-4 h-4" /> <span className="hidden sm:inline">Cancel</span>
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        </Card>
+      )}
     </PageTransition>
   );
 }
