@@ -40,7 +40,7 @@ export default function AutoItinerary() {
   const { trip } = useTrip();
   const [days, setDays] = useState(mockDays);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newActivity, setNewActivity] = useState({ title: '', time: '', type: 'attraction', location: '' });
+  const [newActivity, setNewActivity] = useState({ title: '', time: '', type: 'attraction', location: '', dayIndex: 0 });
 
   const handleAddActivity = (e) => {
     e.preventDefault();
@@ -60,13 +60,14 @@ export default function AutoItinerary() {
     };
 
     const updatedDays = [...days];
-    updatedDays[0].activities.push(newAct);
+    const targetIdx = Number(newActivity.dayIndex);
+    updatedDays[targetIdx].activities.push(newAct);
     // Sort activities by time
-    updatedDays[0].activities.sort((a, b) => a.time.localeCompare(b.time));
+    updatedDays[targetIdx].activities.sort((a, b) => a.time.localeCompare(b.time));
     
     setDays(updatedDays);
     setIsModalOpen(false);
-    setNewActivity({ title: '', time: '', type: 'attraction', location: '' });
+    setNewActivity({ title: '', time: '', type: 'attraction', location: '', dayIndex: 0 });
   };
 
   return (
@@ -300,6 +301,18 @@ export default function AutoItinerary() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="block text-sm font-bold text-muted mb-1.5">Day</label>
+                    <select 
+                      value={newActivity.dayIndex}
+                      onChange={(e) => setNewActivity({...newActivity, dayIndex: e.target.value})}
+                      className="w-full px-4 py-3 rounded-xl border border-black/10 bg-white/50 focus:bg-white focus:ring-2 focus:ring-teal/50 outline-none transition-all"
+                    >
+                      {days.map((d, i) => (
+                        <option key={i} value={i}>Day {i + 1} - {new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-bold text-muted mb-1.5">Time</label>
                     <input 
                       type="time" 
@@ -309,6 +322,9 @@ export default function AutoItinerary() {
                       className="w-full px-4 py-3 rounded-xl border border-black/10 bg-white/50 focus:bg-white focus:ring-2 focus:ring-teal/50 outline-none transition-all"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-muted mb-1.5">Category</label>
                     <select 
@@ -322,17 +338,16 @@ export default function AutoItinerary() {
                       <option value="logistics">Logistics</option>
                     </select>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-muted mb-1.5">Location</label>
-                  <input 
-                    type="text" 
-                    value={newActivity.location}
-                    onChange={(e) => setNewActivity({...newActivity, location: e.target.value})}
-                    placeholder="e.g. Seminyak Beach"
-                    className="w-full px-4 py-3 rounded-xl border border-black/10 bg-white/50 focus:bg-white focus:ring-2 focus:ring-teal/50 outline-none transition-all"
-                  />
+                  <div>
+                    <label className="block text-sm font-bold text-muted mb-1.5">Location</label>
+                    <input 
+                      type="text" 
+                      value={newActivity.location}
+                      onChange={(e) => setNewActivity({...newActivity, location: e.target.value})}
+                      placeholder="e.g. Seminyak Beach"
+                      className="w-full px-4 py-3 rounded-xl border border-black/10 bg-white/50 focus:bg-white focus:ring-2 focus:ring-teal/50 outline-none transition-all"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-4">
