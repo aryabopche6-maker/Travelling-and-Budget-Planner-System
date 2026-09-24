@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrip } from "../../context/TripContext";
 import { Clock, Sun, MapPin, GripVertical, Plus, Coffee, Camera, Compass, Sparkles, Navigation, ChevronRight, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
@@ -51,6 +51,11 @@ export default function AutoItinerary() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newActivity, setNewActivity] = useState({ title: "", time: "", category: "attraction", location: "", dayId: "" });
+
+  const openModalForDay = (dayId) => {
+    setNewActivity({ title: "", time: "", category: "attraction", location: "", dayId });
+    setIsModalOpen(true);
+  };
 
   useEffect(() => { if (tripId) fetchItinerary(); }, [tripId]);
 
@@ -112,13 +117,8 @@ export default function AutoItinerary() {
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4 text-white">{trip?.name || "Your Curated Journey"}</h1>
               <p className="text-lg text-white/70">Trip to <span className="text-teal-300 font-semibold">{trip?.destination || "..."}</span> — day-by-day, perfectly paced.</p>
             </div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button onClick={() => setIsModalOpen(true)} className="gap-2 bg-gradient-to-r from-teal to-emerald-500 text-white border-0 shadow-lg shadow-teal/30 px-6 py-6 rounded-2xl text-lg hover:shadow-teal/50 transition-all duration-300">
-                <Plus className="w-5 h-5" /> Add Activity
-              </Button>
-            </motion.div>
+            </div>
           </div>
-        </div>
       </Reveal>
 
       <div className="space-y-16">
@@ -202,6 +202,19 @@ export default function AutoItinerary() {
                     );
                   })}
                 </div>
+
+                {/* Per-day Add Activity button */}
+                <motion.button
+                  onClick={() => openModalForDay(day.id)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="mt-6 w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-teal/30 bg-teal/5 hover:bg-teal/10 hover:border-teal/50 text-teal font-semibold transition-all duration-300 group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-teal/20 flex items-center justify-center group-hover:bg-teal/30 transition-colors">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                  Add activity to Day {day.dayNumber}
+                </motion.button>
               </div>
             </div>
           </Reveal>
