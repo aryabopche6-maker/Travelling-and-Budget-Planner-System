@@ -52,6 +52,7 @@ const PublicRoute = ({ children }) => {
 };
 
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import HeroBackground from './components/animations/HeroBackground';
 
 function AppRoutes() {
   return (
@@ -96,6 +97,7 @@ function AppRoutes() {
 function App() {
   return (
     <ErrorBoundary>
+      <HeroBackground />
       <ToastProvider>
         <AuthProvider>
           <BrowserRouter>
