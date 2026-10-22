@@ -12,30 +12,7 @@ import MagneticButton from '../../components/animations/MagneticButton';
 import TiltCard from '../../components/animations/TiltCard';
 import { useAuth } from '../../context/AuthContext';
 
-// Dummy data
-const upcomingTrip = {
-  id: 't1',
-  destination: 'Kyoto, Japan',
-  image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=800&auto=format&fit=crop',
-  startDate: '2024-04-10',
-  endDate: '2024-04-20',
-  members: [
-    { id: '1', name: 'You', role: 'TRIP_ADMIN' },
-    { id: '2', name: 'Sarah M.', role: 'TRAVELER' },
-    { id: '3', name: 'Raj K.', role: 'TRAVELER' },
-    { id: '4', name: 'Priya D.', role: 'TRAVELER' },
-  ],
-  budget: 250000,
-  spent: 120000,
-  status: 'Planning',
-  role: 'TRIP_ADMIN'
-};
-
-const recentActivities = [
-  { id: 1, action: 'Added to itinerary', detail: 'Fushimi Inari Shrine', time: '2h ago', trip: 'Kyoto, Japan' },
-  { id: 2, action: 'Expense logged', detail: 'Flight Tickets - ₹45,000', time: '5h ago', trip: 'Kyoto, Japan' },
-  { id: 3, action: 'New member joined', detail: 'Sarah M.', time: '1d ago', trip: 'Goa Escape' },
-];
+import { tripService } from '../../services/tripService';
 
 const stagger = {
   hidden: {},
@@ -54,11 +31,29 @@ const fadeUp = {
 export default function Dashboard() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [upcomingTrip, setUpcomingTrip] = useState(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
+    let isMounted = true;
+    const loadDashboard = async () => {
+      try {
+        const trips = await tripService.getMyTrips(user?.id);
+        if (isMounted) {
+          if (trips && trips.length > 0) {
+            setUpcomingTrip(trips[0]);
+          } else {
+            setUpcomingTrip(null);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load dashboard trips:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    loadDashboard();
+    return () => { isMounted = false; };
+  }, [user?.id]);
 
   if (isLoading) {
     return (
@@ -97,7 +92,16 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold font-display flex items-center gap-2 text-charcoal"><Plane className="w-5 h-5 text-teal" /> Your Next Adventure</h2>
               <Link to="/trips" className="text-sm text-teal hover:text-bright font-medium transition-colors">View All Trips</Link>
             </div>
-            <TripCard trip={upcomingTrip} role={upcomingTrip.role} />
+            {upcomingTrip ? (
+              <TripCard trip={upcomingTrip} role={upcomingTrip.role || 'MEMBER'} />
+            ) : (
+              <div className="p-8 border border-dashed border-teal/30 rounded-2xl bg-teal/5 text-center">
+                <p className="text-charcoal font-medium">No upcoming trips yet!</p>
+                <Link to="/trips/new" className="mt-2 inline-block text-sm text-teal font-bold hover:underline">
+                  + Create your first trip
+                </Link>
+              </div>
+            )}
           </Reveal>
 
           {/* Quick Actions in 3D */}
@@ -114,7 +118,7 @@ export default function Dashboard() {
                 { name: 'Start Adventure', icon: <Plus className="w-6 h-6" />, path: '/trips/new', color: 'text-teal', bg: 'bg-teal/10' },
                 { name: 'Surprise Me', icon: <Sparkles className="w-6 h-6" />, path: '/surprise-me', color: 'text-coral', bg: 'bg-coral/10' },
                 { name: 'My Trips', icon: <MapPin className="w-6 h-6" />, path: '/trips', color: 'text-charcoal', bg: 'bg-charcoal/10' },
-                { name: 'Budget Check', icon: <Wallet className="w-6 h-6" />, path: `/trips/${upcomingTrip.id}/budget`, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { name: 'Budget Check', icon: <Wallet className="w-6 h-6" />, path: upcomingTrip ? `/trips/${upcomingTrip.id}/budget` : '/trips', color: 'text-blue-500', bg: 'bg-blue-500/10' },
               ].map((action, idx) => (
                 <motion.div key={idx} variants={fadeUp} className="h-full">
                   <Link to={action.path} className="block h-full">
@@ -139,14 +143,14 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 gap-4">
               <StatCard 
                 title="Total Planned Budget" 
-                value={upcomingTrip.budget} 
+                value={upcomingTrip?.budget || 0} 
                 isCurrency={true} 
                 icon={<Wallet className="w-6 h-6" />} 
                 color="teal"
               />
               <StatCard 
                 title="Total Spent So Far" 
-                value={upcomingTrip.spent} 
+                value={upcomingTrip?.spent || 0} 
                 isCurrency={true} 
                 icon={<Activity className="w-6 h-6" />} 
                 color="coral"
