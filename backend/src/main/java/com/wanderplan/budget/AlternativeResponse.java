@@ -1,6 +1,5 @@
 package com.wanderplan.budget;
 
-
 public class AlternativeResponse {
     private String id;
     private String category;
@@ -10,10 +9,19 @@ public class AlternativeResponse {
     private Double alternativeCost;
     private Double potentialSaving;
     private String impactDescription;
+    private String alternativeName;
+    private String alternativeType;
+    private String alternativeLocation;
+    private Double alternativeRating;
+    private String alternativeImageUrl;
 
     public AlternativeResponse() {}
 
     public AlternativeResponse(String id, String category, String currentOption, String alternativeOption, Double currentCost, Double alternativeCost, Double potentialSaving, String impactDescription) {
+        this(id, category, currentOption, alternativeOption, currentCost, alternativeCost, potentialSaving, impactDescription, null, null, null, null, null);
+    }
+
+    public AlternativeResponse(String id, String category, String currentOption, String alternativeOption, Double currentCost, Double alternativeCost, Double potentialSaving, String impactDescription, String alternativeName, String alternativeType, String alternativeLocation, Double alternativeRating, String alternativeImageUrl) {
         this.id = id;
         this.category = category;
         this.currentOption = currentOption;
@@ -22,6 +30,11 @@ public class AlternativeResponse {
         this.alternativeCost = alternativeCost;
         this.potentialSaving = potentialSaving;
         this.impactDescription = impactDescription;
+        this.alternativeName = alternativeName;
+        this.alternativeType = alternativeType;
+        this.alternativeLocation = alternativeLocation;
+        this.alternativeRating = alternativeRating;
+        this.alternativeImageUrl = alternativeImageUrl;
     }
 
     public String getId() {
@@ -88,6 +101,46 @@ public class AlternativeResponse {
         this.impactDescription = impactDescription;
     }
 
+    public String getAlternativeName() {
+        return alternativeName;
+    }
+
+    public void setAlternativeName(String alternativeName) {
+        this.alternativeName = alternativeName;
+    }
+
+    public String getAlternativeType() {
+        return alternativeType;
+    }
+
+    public void setAlternativeType(String alternativeType) {
+        this.alternativeType = alternativeType;
+    }
+
+    public String getAlternativeLocation() {
+        return alternativeLocation;
+    }
+
+    public void setAlternativeLocation(String alternativeLocation) {
+        this.alternativeLocation = alternativeLocation;
+    }
+
+    public Double getAlternativeRating() {
+        return alternativeRating;
+    }
+
+    public void setAlternativeRating(Double alternativeRating) {
+        this.alternativeRating = alternativeRating;
+    }
+
+    public String getAlternativeImageUrl() {
+        return alternativeImageUrl;
+    }
+
+    public void setAlternativeImageUrl(String alternativeImageUrl) {
+        this.alternativeImageUrl = alternativeImageUrl;
+    }
+
     public static AlternativeResponseBuilder builder() {
         return new AlternativeResponseBuilder();
     }
@@ -101,6 +154,11 @@ public class AlternativeResponse {
         private Double alternativeCost;
         private Double potentialSaving;
         private String impactDescription;
+        private String alternativeName;
+        private String alternativeType;
+        private String alternativeLocation;
+        private Double alternativeRating;
+        private String alternativeImageUrl;
 
         public AlternativeResponseBuilder() {}
 
@@ -144,9 +202,33 @@ public class AlternativeResponse {
             return this;
         }
 
+        public AlternativeResponseBuilder alternativeName(String alternativeName) {
+            this.alternativeName = alternativeName;
+            return this;
+        }
+
+        public AlternativeResponseBuilder alternativeType(String alternativeType) {
+            this.alternativeType = alternativeType;
+            return this;
+        }
+
+        public AlternativeResponseBuilder alternativeLocation(String alternativeLocation) {
+            this.alternativeLocation = alternativeLocation;
+            return this;
+        }
+
+        public AlternativeResponseBuilder alternativeRating(Double alternativeRating) {
+            this.alternativeRating = alternativeRating;
+            return this;
+        }
+
+        public AlternativeResponseBuilder alternativeImageUrl(String alternativeImageUrl) {
+            this.alternativeImageUrl = alternativeImageUrl;
+            return this;
+        }
+
         public AlternativeResponse build() {
-            return new AlternativeResponse(this.id, this.category, this.currentOption, this.alternativeOption, this.currentCost, this.alternativeCost, this.potentialSaving, this.impactDescription);
+            return new AlternativeResponse(this.id, this.category, this.currentOption, this.alternativeOption, this.currentCost, this.alternativeCost, this.potentialSaving, this.impactDescription, this.alternativeName, this.alternativeType, this.alternativeLocation, this.alternativeRating, this.alternativeImageUrl);
         }
     }
-
 }

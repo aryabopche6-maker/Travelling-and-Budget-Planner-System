@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrip } from "../../context/TripContext";
-import { Clock, Sun, MapPin, GripVertical, Plus, Coffee, Camera, Compass, Sparkles, Navigation, ChevronRight, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
+import { Clock, Sun, MapPin, GripVertical, Plus, Coffee, Camera, Compass, Sparkles, Navigation, ChevronRight, X, Loader2, AlertTriangle, Trash2, RefreshCw, Hotel, CheckCircle2, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import Button from "../../components/common/Button";
 import PageTransition from "../../components/common/PageTransition";
 import Reveal from "../../components/animations/Reveal";
@@ -11,6 +12,8 @@ const CATEGORY_META = {
   "food & culture": { icon: Coffee, gradient: "from-orange-500/20 to-amber-500/20", color: "text-orange-500" },
   food:             { icon: Coffee, gradient: "from-orange-500/20 to-amber-500/20", color: "text-orange-500" },
   attraction:       { icon: Camera, gradient: "from-purple-500/20 to-pink-500/20",  color: "text-purple-500" },
+  "stay & hotel":   { icon: Hotel,  gradient: "from-emerald-500/20 to-teal-500/20",  color: "text-emerald-500" },
+  hotel:            { icon: Hotel,  gradient: "from-emerald-500/20 to-teal-500/20",  color: "text-emerald-500" },
   relax:            { icon: Sparkles, gradient: "from-rose-500/20 to-pink-500/20",  color: "text-rose-500" },
   relaxation:       { icon: Sparkles, gradient: "from-rose-500/20 to-pink-500/20",  color: "text-rose-500" },
   logistics:        { icon: Navigation, gradient: "from-blue-500/20 to-cyan-500/20", color: "text-blue-500" },
@@ -21,6 +24,8 @@ const CATEGORY_IMAGES = {
   "food & culture": "https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&w=800&q=80",
   food:             "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=80",
   attraction:       "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=800&q=80",
+  "stay & hotel":   "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
+  hotel:            "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
   relax:            "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=800&q=80",
   relaxation:       "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=800&q=80",
   logistics:        "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80",
@@ -31,8 +36,9 @@ function getMeta(category) {
   const key = (category || "").toLowerCase();
   return CATEGORY_META[key] || DEFAULT_META;
 }
-function getImage(category) {
-  const key = (category || "").toLowerCase();
+function getImage(act) {
+  if (act?.imageUrl) return act.imageUrl;
+  const key = (act?.category || "").toLowerCase();
   return CATEGORY_IMAGES[key] || DEFAULT_IMAGE;
 }
 
@@ -46,7 +52,10 @@ export default function AutoItinerary() {
   const tripId = trip?.id;
 
   const [days, setDays] = useState([]);
+  const [selectedPlaces, setSelectedPlaces] = useState([]);
+  const [selectedHotel, setSelectedHotel] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -57,16 +66,70 @@ export default function AutoItinerary() {
     setIsModalOpen(true);
   };
 
-  useEffect(() => { if (tripId) fetchItinerary(); }, [tripId]);
+  useEffect(() => { 
+    if (tripId) {
+      fetchItinerary();
+      loadSelectionStats();
+    }
+  }, [tripId, trip?.startDate, trip?.endDate, trip?.destination]);
+
+  const loadSelectionStats = async () => {
+    try {
+      const [places, hotel] = await Promise.all([
+        itineraryService.getSelectedPlaces(tripId),
+        itineraryService.getSelectedHotel(tripId)
+      ]);
+      setSelectedPlaces(places || []);
+      setSelectedHotel(hotel || null);
+    } catch (e) {
+      console.warn("Could not load selection stats:", e);
+    }
+  };
 
   const fetchItinerary = async () => {
     try {
-      setLoading(true); setError(null);
+      setLoading(true); 
+      setError(null);
       const data = await itineraryService.getItinerary(tripId);
+      if (data && data.days && data.days.length > 0) {
+        setDays(data.days);
+        setNewActivity(prev => ({ ...prev, dayId: data.days[0].id }));
+      } else {
+        // If empty, trigger auto-generate
+        const generated = await itineraryService.generateItinerary(tripId);
+        setDays(generated.days || []);
+        if (generated.days?.length > 0) {
+          setNewActivity(prev => ({ ...prev, dayId: generated.days[0].id }));
+        }
+      }
+    } catch (err) { 
+      console.error("Itinerary fetch failed, attempting auto-generate fallback:", err);
+      try {
+        const generated = await itineraryService.generateItinerary(tripId);
+        setDays(generated.days || []);
+        if (generated.days?.length > 0) {
+          setNewActivity(prev => ({ ...prev, dayId: generated.days[0].id }));
+        }
+      } catch (genErr) {
+        console.error("Itinerary generate fallback also failed:", genErr);
+        setError("Could not load itinerary. Click Retry or Regenerate below.");
+      }
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  const handleRegenerateItinerary = async () => {
+    try {
+      setRegenerating(true);
+      const data = await itineraryService.generateItinerary(tripId);
       setDays(data.days || []);
-      if (data.days?.length > 0) setNewActivity(prev => ({ ...prev, dayId: data.days[0].id }));
-    } catch { setError("Could not load itinerary. Please try again."); }
-    finally { setLoading(false); }
+      await loadSelectionStats();
+    } catch (e) {
+      alert("Failed to regenerate itinerary: " + e.message);
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const handleAddActivity = async (e) => {
@@ -74,24 +137,40 @@ export default function AutoItinerary() {
     if (!newActivity.title || !newActivity.time || !newActivity.dayId) return;
     try {
       setSaving(true);
-      await itineraryService.addActivity(tripId, { dayId: newActivity.dayId, title: newActivity.title, time: newActivity.time, category: newActivity.category, location: newActivity.location });
+      await itineraryService.addActivity(tripId, { 
+        dayId: newActivity.dayId, 
+        title: newActivity.title, 
+        time: newActivity.time, 
+        category: newActivity.category, 
+        location: newActivity.location 
+      });
       setIsModalOpen(false);
       setNewActivity({ title: "", time: "", category: "attraction", location: "", dayId: days[0]?.id || "" });
       await fetchItinerary();
-    } catch { alert("Failed to add activity."); }
-    finally { setSaving(false); }
+    } catch { 
+      alert("Failed to add activity."); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const handleDeleteActivity = async (activityId) => {
     if (!confirm("Remove this activity?")) return;
-    try { await itineraryService.deleteActivity(tripId, activityId); await fetchItinerary(); }
-    catch { alert("Failed to delete activity."); }
+    try { 
+      await itineraryService.deleteActivity(tripId, activityId); 
+      await fetchItinerary(); 
+    } catch { 
+      alert("Failed to delete activity."); 
+    }
   };
+
+  // Calculate duration
+  const tripDurationDays = days.length;
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 text-muted">
       <Loader2 className="w-10 h-10 animate-spin text-teal" />
-      <p className="font-medium">Loading your itinerary...</p>
+      <p className="font-medium">Crafting your day-by-day itinerary with your selected places & stay...</p>
     </div>
   );
 
@@ -104,26 +183,81 @@ export default function AutoItinerary() {
   );
 
   return (
-    <PageTransition variant="fade" className="max-w-6xl mx-auto pb-20 px-4 sm:px-6 lg:px-8">
+    <PageTransition variant="fade" className="max-w-6xl mx-auto pb-20 px-4 sm:px-6 lg:px-8 space-y-8">
+      {/* Hero Header */}
       <Reveal>
-        <div className="relative overflow-hidden rounded-3xl bg-charcoal text-white p-8 sm:p-12 mb-12 shadow-2xl">
+        <div className="relative overflow-hidden rounded-3xl bg-charcoal text-white p-8 sm:p-12 shadow-2xl">
           <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-teal/30 rounded-full blur-[100px] pointer-events-none" />
           <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-coral/20 rounded-full blur-[80px] pointer-events-none" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-sm font-medium backdrop-blur-md mb-4 text-teal-100">
-                <Sparkles className="w-4 h-4" /> Smart Day Planner
+                <Sparkles className="w-4 h-4" /> Smart Auto Itinerary Planner
               </div>
-              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4 text-white">{trip?.name || "Your Curated Journey"}</h1>
-              <p className="text-lg text-white/70">Trip to <span className="text-teal-300 font-semibold">{trip?.destination || "..."}</span> — day-by-day, perfectly paced.</p>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4 text-white">
+                {tripDurationDays}-Day {trip?.destination || "Trip"} Itinerary
+              </h1>
+              <p className="text-lg text-white/70">
+                Perfect day-by-day plan crafted for your exact trip duration. Powered by your selected places and stay.
+              </p>
             </div>
+
+            {/* Quick Actions */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <Button
+                onClick={handleRegenerateItinerary}
+                isLoading={regenerating}
+                className="bg-white hover:bg-white/90 text-charcoal font-bold shadow-lg flex items-center justify-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+                Regenerate Itinerary
+              </Button>
             </div>
           </div>
+        </div>
       </Reveal>
 
+      {/* Selected Places & Hotel Summary Bar */}
+      <Reveal delay={0.05}>
+        <div className="bg-white rounded-2xl border border-muted/20 p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs uppercase font-extrabold tracking-wider text-muted">Trip Duration:</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-teal/10 text-teal font-bold text-xs">
+                {tripDurationDays} Days ({trip?.startDate ? new Date(trip.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Start'} &rarr; {trip?.endDate ? new Date(trip.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'End'})
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-sm text-charcoal">
+              <span>Selected for this Trip:</span>
+              <span className="font-semibold text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> {selectedPlaces.length} Places
+              </span>
+              <span>&bull;</span>
+              <span className="font-semibold text-teal flex items-center gap-1">
+                <Hotel className="w-4 h-4" /> {selectedHotel ? selectedHotel.name : "Auto Default Stay"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-end md:self-center">
+            <Link to={`/trips/${tripId}/places`}>
+              <Button variant="outline" size="sm" className="text-xs border-muted/30 hover:border-teal/40">
+                + Select Places <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            </Link>
+            <Link to={`/trips/${tripId}/hotels`}>
+              <Button variant="outline" size="sm" className="text-xs border-muted/30 hover:border-teal/40">
+                + Change Stay <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Reveal>
+
+      {/* Day by Day Timeline */}
       <div className="space-y-16">
         {days.map((day, dayIdx) => (
-          <Reveal key={day.id} delay={dayIdx * 0.1}>
+          <Reveal key={day.id || dayIdx} delay={dayIdx * 0.1}>
             <div className="relative">
               <div className="sticky top-4 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-white/80 backdrop-blur-xl p-4 rounded-2xl border border-white shadow-sm ring-1 ring-black/5">
                 <div className="flex items-center gap-4">
@@ -152,9 +286,9 @@ export default function AutoItinerary() {
                     const globalIdx = dayIdx * 5 + actIdx;
                     const meta = getMeta(act.category);
                     const Icon = meta.icon;
-                    const image = getImage(act.category);
+                    const image = getImage(act);
                     return (
-                      <motion.div key={act.id} custom={globalIdx} variants={timelineItem} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-50px" }} className="relative group">
+                      <motion.div key={act.id || actIdx} custom={globalIdx} variants={timelineItem} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-50px" }} className="relative group">
                         <div className="absolute -left-8 sm:-left-12 top-1/2 -translate-y-1/2 z-10 hidden sm:flex items-center justify-center">
                           <motion.div initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.2 }} className="w-10 h-10 rounded-full bg-white border-4 border-teal shadow-md flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                             <div className="w-2 h-2 bg-teal rounded-full" />
@@ -164,7 +298,12 @@ export default function AutoItinerary() {
                           <div className={"absolute inset-0 bg-gradient-to-br " + meta.gradient + " opacity-50 pointer-events-none"} />
                           <div className="relative flex flex-col md:flex-row p-3 gap-6 h-full items-stretch">
                             <div className="relative w-full md:w-56 h-44 md:h-auto rounded-2xl overflow-hidden shrink-0 shadow-inner group-hover:shadow-lg transition-shadow duration-300">
-                              <img src={image} alt={act.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                              <img 
+                                src={image} 
+                                alt={act.title} 
+                                onError={(e) => { e.currentTarget.src = DEFAULT_IMAGE; }}
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                              />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                               <div className="absolute bottom-3 left-3">
                                 <div className="bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-lg text-white text-sm font-bold flex items-center gap-1.5 border border-white/20 shadow-sm">
@@ -186,9 +325,9 @@ export default function AutoItinerary() {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-4 text-muted font-medium mt-1 text-sm">
-                                {act.location && <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" /> {act.location}</span>}
-                                {act.duration && <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {act.duration}</span>}
-                                {act.estimatedCost > 0 && <span className="flex items-center gap-1.5 text-teal font-semibold">Rs.{act.estimatedCost?.toLocaleString()}</span>}
+                                {act.location && <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-teal" /> {act.location}</span>}
+                                {act.duration && <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-teal" /> {act.duration}</span>}
+                                {act.estimatedCost > 0 && <span className="flex items-center gap-1.5 text-teal font-semibold">₹{act.estimatedCost?.toLocaleString()}</span>}
                               </div>
                               <div className="mt-5 flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                 <a href={"https://www.google.com/maps/search/" + encodeURIComponent(act.location || act.title)} target="_blank" rel="noopener noreferrer">
@@ -251,6 +390,7 @@ export default function AutoItinerary() {
                     <select value={newActivity.category} onChange={(e) => setNewActivity({ ...newActivity, category: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-black/10 bg-white/50 focus:bg-white focus:ring-2 focus:ring-teal/50 outline-none transition-all">
                       <option value="attraction">Attraction</option>
                       <option value="food">Food & Drink</option>
+                      <option value="stay & hotel">Stay & Hotel</option>
                       <option value="relax">Relaxation</option>
                       <option value="logistics">Logistics</option>
                     </select>

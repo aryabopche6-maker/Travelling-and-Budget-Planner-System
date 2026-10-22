@@ -1,10 +1,13 @@
 package com.wanderplan.poll;
 
+import com.wanderplan.activity.ActivityFeedService;
 import com.wanderplan.exception.BadRequestException;
 import com.wanderplan.exception.ResourceNotFoundException;
 import com.wanderplan.trip.Trip;
 import com.wanderplan.trip.TripRepository;
 import com.wanderplan.trip.TripService;
+import com.wanderplan.user.User;
+import com.wanderplan.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,12 @@ public class PollService {
     @Autowired
     private TripService tripService;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ActivityFeedService activityFeedService;
+
     @Transactional
     public PollResponse createPoll(Long tripId, Long userId, CreatePollRequest request) {
         tripService.validateTripAdmin(tripId, userId);
@@ -36,11 +45,15 @@ public class PollService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         Poll poll = Poll.builder()
                 .trip(trip)
                 .title(request.getTitle())
                 .category(request.getCategory() != null ? request.getCategory() : "General")
                 .isAnonymous(request.getIsAnonymous() != null ? request.getIsAnonymous() : false)
+                .isLocked(false)
                 .createdBy(userId)
                 .options(new ArrayList<>())
                 .build();
@@ -57,6 +70,12 @@ public class PollService {
 
         poll = pollRepository.save(poll);
 
+        // Log activity
+        activityFeedService.logActivity(tripId, userId, user.getName(),
+                "POLL_CREATED",
+                user.getName() + " created a poll: \"" + request.getTitle() + "\"",
+                "BarChart", "POLL");
+
         return mapToResponse(poll, userId);
     }
 
@@ -72,6 +91,10 @@ public class PollService {
 
         Poll poll = pollRepository.findById(pollId)
                 .orElseThrow(() -> new ResourceNotFoundException("Poll not found"));
+
+        if (Boolean.TRUE.equals(poll.getIsLocked())) {
+            throw new BadRequestException("This poll has been locked by the admin. Voting is closed.");
+        }
 
         if (voteRepository.existsByPollIdAndUserId(pollId, userId)) {
             throw new BadRequestException("You have already voted in this poll!");
@@ -90,7 +113,58 @@ public class PollService {
 
         voteRepository.save(vote);
 
+        // Log activity
+        User user = userRepository.findById(userId).orElse(null);
+        String userName = user != null ? user.getName() : "Someone";
+        activityFeedService.logActivity(tripId, userId, userName,
+                "VOTE_CAST",
+                userName + " voted in poll: \"" + poll.getTitle() + "\"",
+                "Vote", "POLL");
+
         return mapToResponse(poll, userId);
+    }
+
+    @Transactional
+    public PollResponse lockPoll(Long tripId, Long pollId, Long adminUserId, Long optionId) {
+        tripService.validateTripAdmin(tripId, adminUserId);
+
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new ResourceNotFoundException("Poll not found"));
+
+        if (!poll.getTrip().getId().equals(tripId)) {
+            throw new BadRequestException("Poll does not belong to this trip");
+        }
+
+        // If optionId provided, validate it belongs to this poll
+        if (optionId != null) {
+            poll.getOptions().stream()
+                    .filter(o -> o.getId().equals(optionId))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Option not found in this poll"));
+        }
+
+        poll.setIsLocked(true);
+        poll.setLockedOptionId(optionId);
+        pollRepository.save(poll);
+
+        User admin = userRepository.findById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Admin not found"));
+
+        String optionText = "";
+        if (optionId != null) {
+            optionText = poll.getOptions().stream()
+                    .filter(o -> o.getId().equals(optionId))
+                    .map(PollOption::getOptionText)
+                    .findFirst().orElse("");
+        }
+
+        activityFeedService.logActivity(tripId, adminUserId, admin.getName(),
+                "POLL_LOCKED",
+                admin.getName() + " finalized poll \"" + poll.getTitle() + "\"" +
+                        (optionText.isEmpty() ? "" : " → " + optionText),
+                "Lock", "POLL");
+
+        return mapToResponse(poll, adminUserId);
     }
 
     private PollResponse mapToResponse(Poll poll, Long userId) {
@@ -122,6 +196,8 @@ public class PollService {
                 .totalVotes(totalVotes)
                 .hasVoted(hasVoted)
                 .userVotedOptionId(userOptionId)
+                .isLocked(poll.getIsLocked())
+                .lockedOptionId(poll.getLockedOptionId())
                 .options(optionDtos)
                 .createdAt(poll.getCreatedAt())
                 .build();

@@ -35,7 +35,6 @@ import SOSEmergency from './pages/trips/SOSEmergency';
 import WeatherForecaster from './pages/trips/WeatherForecaster';
 import HiddenCosts from './pages/trips/HiddenCosts';
 import SmartAlternatives from './pages/trips/SmartAlternatives';
-import BudgetRescue from './pages/trips/BudgetRescue';
 
 const ProtectedRoute = ({ children }) => {
   const { user, isLoading } = useAuth();
@@ -87,7 +86,6 @@ function AppRoutes() {
         <Route path="members" element={<GroupMembers />} />
         <Route path="voting" element={<GroupVoting />} />
         <Route path="expenses" element={<SplitSmart />} />
-        <Route path="budget-rescue" element={<BudgetRescue />} />
         <Route path="sos" element={<SOSEmergency />} />
       </Route>
     </Routes>

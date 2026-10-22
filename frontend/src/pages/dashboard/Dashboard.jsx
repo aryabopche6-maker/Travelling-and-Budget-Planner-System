@@ -9,6 +9,7 @@ import TripCard from '../../components/common/TripCard';
 import PageTransition from '../../components/common/PageTransition';
 import Reveal from '../../components/animations/Reveal';
 import MagneticButton from '../../components/animations/MagneticButton';
+import TiltCard from '../../components/animations/TiltCard';
 import { useAuth } from '../../context/AuthContext';
 
 // Dummy data
@@ -99,29 +100,30 @@ export default function Dashboard() {
             <TripCard trip={upcomingTrip} role={upcomingTrip.role} />
           </Reveal>
 
-          {/* Quick Actions */}
+          {/* Quick Actions in 3D */}
           <Reveal delay={0.2}>
-            <h2 className="text-lg font-bold mb-4">Quick Actions</h2>
+            <h2 className="text-lg font-bold mb-4 font-display text-charcoal">Quick Actions</h2>
             <motion.div 
               variants={stagger}
               initial="hidden"
               animate="show"
-              className="grid grid-cols-2 md:grid-cols-4 gap-4"
+              className="grid grid-cols-2 md:grid-cols-4 gap-6"
+              style={{ perspective: 1000 }}
             >
               {[
-                { name: 'Start Adventure', icon: <Plus className="w-5 h-5" />, path: '/trips/new', color: 'bg-teal/10 text-teal hover:bg-teal/20' },
-                { name: 'Surprise Me', icon: <Sparkles className="w-5 h-5" />, path: '/surprise-me', color: 'bg-coral/10 text-coral hover:bg-coral/20' },
-                { name: 'My Trips', icon: <MapPin className="w-5 h-5" />, path: '/trips', color: 'bg-charcoal/5 text-charcoal hover:bg-charcoal/10' },
-                { name: 'Budget Check', icon: <Wallet className="w-5 h-5" />, path: `/trips/${upcomingTrip.id}/budget`, color: 'bg-bg text-charcoal hover:bg-bg/70' },
+                { name: 'Start Adventure', icon: <Plus className="w-6 h-6" />, path: '/trips/new', color: 'text-teal', bg: 'bg-teal/10' },
+                { name: 'Surprise Me', icon: <Sparkles className="w-6 h-6" />, path: '/surprise-me', color: 'text-coral', bg: 'bg-coral/10' },
+                { name: 'My Trips', icon: <MapPin className="w-6 h-6" />, path: '/trips', color: 'text-charcoal', bg: 'bg-charcoal/10' },
+                { name: 'Budget Check', icon: <Wallet className="w-6 h-6" />, path: `/trips/${upcomingTrip.id}/budget`, color: 'text-blue-500', bg: 'bg-blue-500/10' },
               ].map((action, idx) => (
-                <motion.div key={idx} variants={fadeUp}>
-                  <Link to={action.path}>
-                    <Card hoverLift className={`p-4 flex flex-col items-center justify-center gap-3 h-32 ${action.color} border-transparent cursor-pointer`}>
-                      <div className="p-3 rounded-full bg-white shadow-sm border border-muted/30">
+                <motion.div key={idx} variants={fadeUp} className="h-full">
+                  <Link to={action.path} className="block h-full">
+                    <TiltCard className="p-6 flex flex-col items-center justify-center gap-4 h-40">
+                      <div className={`p-4 rounded-xl shadow-lg border border-white/50 backdrop-blur-md ${action.bg} ${action.color}`}>
                         {action.icon}
                       </div>
-                      <span className="text-sm font-medium">{action.name}</span>
-                    </Card>
+                      <span className="text-sm font-bold text-charcoal">{action.name}</span>
+                    </TiltCard>
                   </Link>
                 </motion.div>
               ))}

@@ -27,14 +27,21 @@ public class ItineraryActivity {
 
     private String duration;
 
-        private Boolean isOutdoor = true;
+    private Boolean isOutdoor = true;
 
     @Column(name = "order_index")
     private Integer orderIndex;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     public ItineraryActivity() {}
 
     public ItineraryActivity(Long id, ItineraryDay itineraryDay, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor, Integer orderIndex) {
+        this(id, itineraryDay, time, title, category, location, estimatedCost, duration, isOutdoor, orderIndex, null);
+    }
+
+    public ItineraryActivity(Long id, ItineraryDay itineraryDay, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor, Integer orderIndex, String imageUrl) {
         this.id = id;
         this.itineraryDay = itineraryDay;
         this.time = time;
@@ -45,6 +52,7 @@ public class ItineraryActivity {
         this.duration = duration;
         this.isOutdoor = isOutdoor;
         this.orderIndex = orderIndex;
+        this.imageUrl = imageUrl;
     }
 
     public Long getId() {
@@ -131,6 +139,14 @@ public class ItineraryActivity {
         this.orderIndex = orderIndex;
     }
 
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
     public static ItineraryActivityBuilder builder() {
         return new ItineraryActivityBuilder();
     }
@@ -146,6 +162,7 @@ public class ItineraryActivity {
         private String duration;
         private Boolean isOutdoor;
         private Integer orderIndex;
+        private String imageUrl;
 
         public ItineraryActivityBuilder() {}
 
@@ -199,9 +216,13 @@ public class ItineraryActivity {
             return this;
         }
 
+        public ItineraryActivityBuilder imageUrl(String imageUrl) {
+            this.imageUrl = imageUrl;
+            return this;
+        }
+
         public ItineraryActivity build() {
-            return new ItineraryActivity(this.id, this.itineraryDay, this.time, this.title, this.category, this.location, this.estimatedCost, this.duration, this.isOutdoor, this.orderIndex);
+            return new ItineraryActivity(this.id, this.itineraryDay, this.time, this.title, this.category, this.location, this.estimatedCost, this.duration, this.isOutdoor, this.orderIndex, this.imageUrl);
         }
     }
-
 }

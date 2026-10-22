@@ -1,22 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Sparkles, Compass } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useTrip } from '../../context/TripContext';
+import { tripService } from '../../services/tripService';
 import Button from '../../components/common/Button';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Reveal from '../../components/animations/Reveal';
 
 const MOODS = [
-  { id: 'adventure', name: 'Adventure', image: 'https://images.unsplash.com/photo-1533692328991-08159ff19fca?w=500&q=80' },
-  { id: 'beach', name: 'Beach & Relax', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=80' },
-  { id: 'nature', name: 'Nature', image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=500&q=80' },
-  { id: 'food', name: 'Food & Culture', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&q=80' },
-  { id: 'history', name: 'History', image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=500&q=80' },
-  { id: 'luxury', name: 'Luxury', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&q=80' },
-  { id: 'nightlife', name: 'Nightlife', image: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=500&q=80' },
-  { id: 'romantic', name: 'Romantic', image: 'https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=500&q=80' },
-  { id: 'family', name: 'Family', image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=500&q=80' },
-  { id: 'roadtrip', name: 'Road Trip', image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=500&q=80' },
+  { id: 'Adventure', name: 'Adventure', image: 'https://images.unsplash.com/photo-1533692328991-08159ff19fca?w=500&q=80' },
+  { id: 'Beach & Relax', name: 'Beach & Relax', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=80' },
+  { id: 'Nature', name: 'Nature', image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=500&q=80' },
+  { id: 'Food & Culture', name: 'Food & Culture', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&q=80' },
+  { id: 'History', name: 'History', image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=500&q=80' },
+  { id: 'Luxury', name: 'Luxury', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&q=80' },
+  { id: 'Nightlife', name: 'Nightlife', image: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=500&q=80' },
+  { id: 'Romantic', name: 'Romantic', image: 'https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=500&q=80' },
+  { id: 'Family', name: 'Family', image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=500&q=80' },
+  { id: 'Road Trip', name: 'Road Trip', image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=500&q=80' },
 ];
 
 const moodCard = {
@@ -29,10 +32,23 @@ const moodCard = {
 };
 
 export default function MoodPreferences() {
+  const { trip, setTrip } = useTrip();
+  const navigate = useNavigate();
   const [selectedMoods, setSelectedMoods] = useState([]);
-  const [pace, setPace] = useState('balanced');
-  const [style, setStyle] = useState('moderate');
+  const [pace, setPace] = useState('Balanced');
+  const [style, setStyle] = useState('Moderate');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (trip) {
+      if (trip.interests && Array.isArray(trip.interests)) {
+        setSelectedMoods(trip.interests);
+      }
+      if (trip.travelPace) setPace(trip.travelPace.charAt(0).toUpperCase() + trip.travelPace.slice(1).toLowerCase());
+      if (trip.travelStyle) setStyle(trip.travelStyle.charAt(0).toUpperCase() + trip.travelStyle.slice(1).toLowerCase());
+    }
+  }, [trip]);
 
   const toggleMood = (id) => {
     setSelectedMoods(prev => 
@@ -40,12 +56,29 @@ export default function MoodPreferences() {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async (redirectPlaces = false) => {
+    if (!trip?.id) return;
     setIsSaving(true);
-    setTimeout(() => {
+    setSaveSuccess(false);
+    try {
+      const updated = await tripService.updateTrip(trip.id, {
+        travelPace: pace,
+        travelStyle: style,
+        interests: selectedMoods
+      });
+      if (updated) {
+        setTrip(updated);
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      if (redirectPlaces) {
+        navigate(`/trips/${trip.id}/places`);
+      }
+    } catch (err) {
+      console.error('Failed to save preferences:', err);
+    } finally {
       setIsSaving(false);
-      // Show toast
-    }, 1000);
+    }
   };
 
   return (
@@ -142,16 +175,16 @@ export default function MoodPreferences() {
             <h3 className="text-xl font-bold mb-6 text-charcoal tracking-tight">Travel Pace</h3>
             <div className="space-y-4">
               {[
-                { id: 'relaxed', label: 'Relaxed', desc: '1-2 activities/day' },
-                { id: 'balanced', label: 'Balanced', desc: '3-4 activities/day' },
-                { id: 'packed', label: 'Packed', desc: 'Maximize every minute' }
+                { id: 'Relaxed', label: 'Relaxed', desc: '1-2 activities/day' },
+                { id: 'Balanced', label: 'Balanced', desc: '3-4 activities/day' },
+                { id: 'Packed', label: 'Packed', desc: 'Maximize every minute' }
               ].map(opt => (
                 <motion.label 
                   key={opt.id} 
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                   className={`flex items-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 ${
-                    pace === opt.id 
+                    pace.toLowerCase() === opt.id.toLowerCase() 
                       ? 'bg-teal/10 border-teal shadow-[0_0_15px_rgba(25,181,165,0.15)]' 
                       : 'bg-bg border-muted/30 hover:border-teal/50'
                   }`}
@@ -160,15 +193,15 @@ export default function MoodPreferences() {
                     type="radio" 
                     name="pace" 
                     value={opt.id} 
-                    checked={pace === opt.id} 
+                    checked={pace.toLowerCase() === opt.id.toLowerCase()} 
                     onChange={(e) => setPace(e.target.value)} 
                     className="hidden" 
                   />
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mr-4 transition-colors ${
-                    pace === opt.id ? 'border-teal' : 'border-grayblue-400'
+                    pace.toLowerCase() === opt.id.toLowerCase() ? 'border-teal' : 'border-grayblue-400'
                   }`}>
                     <AnimatePresence>
-                      {pace === opt.id && (
+                      {pace.toLowerCase() === opt.id.toLowerCase() && (
                         <motion.div 
                           initial={{ scale: 0 }} 
                           animate={{ scale: 1 }} 
@@ -180,7 +213,7 @@ export default function MoodPreferences() {
                     </AnimatePresence>
                   </div>
                   <div>
-                    <span className={`block font-bold text-sm ${pace === opt.id ? 'text-teal' : 'text-charcoal'}`}>{opt.label}</span>
+                    <span className={`block font-bold text-sm ${pace.toLowerCase() === opt.id.toLowerCase() ? 'text-teal' : 'text-charcoal'}`}>{opt.label}</span>
                     <span className="block text-xs text-muted mt-0.5">{opt.desc}</span>
                   </div>
                 </motion.label>
@@ -194,16 +227,16 @@ export default function MoodPreferences() {
             <h3 className="text-xl font-bold mb-6 text-charcoal tracking-tight">Travel Style</h3>
             <div className="space-y-4">
               {[
-                { id: 'budget', label: 'Budget', desc: 'Hostels, street food, public transit' },
-                { id: 'moderate', label: 'Moderate', desc: 'Standard hotels, mix of experiences' },
-                { id: 'premium', label: 'Premium', desc: 'Luxury stays, fine dining, private tours' }
+                { id: 'Budget', label: 'Budget', desc: 'Hostels, street food, public transit' },
+                { id: 'Moderate', label: 'Moderate', desc: 'Standard hotels, mix of experiences' },
+                { id: 'Premium', label: 'Premium', desc: 'Luxury stays, fine dining, private tours' }
               ].map(opt => (
                 <motion.label 
                   key={opt.id} 
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                   className={`flex items-center p-4 rounded-xl cursor-pointer border-2 transition-all duration-300 ${
-                    style === opt.id 
+                    style.toLowerCase() === opt.id.toLowerCase() 
                       ? 'bg-coral-500/10 border-coral shadow-[0_0_15px_rgba(255,128,102,0.15)]' 
                       : 'bg-bg border-muted/30 hover:border-coral/50'
                   }`}
@@ -212,15 +245,15 @@ export default function MoodPreferences() {
                     type="radio" 
                     name="style" 
                     value={opt.id} 
-                    checked={style === opt.id} 
+                    checked={style.toLowerCase() === opt.id.toLowerCase()} 
                     onChange={(e) => setStyle(e.target.value)} 
                     className="hidden" 
                   />
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mr-4 transition-colors ${
-                    style === opt.id ? 'border-coral' : 'border-grayblue-400'
+                    style.toLowerCase() === opt.id.toLowerCase() ? 'border-coral' : 'border-grayblue-400'
                   }`}>
                     <AnimatePresence>
-                      {style === opt.id && (
+                      {style.toLowerCase() === opt.id.toLowerCase() && (
                         <motion.div 
                           initial={{ scale: 0 }} 
                           animate={{ scale: 1 }} 
@@ -232,7 +265,7 @@ export default function MoodPreferences() {
                     </AnimatePresence>
                   </div>
                   <div>
-                    <span className={`block font-bold text-sm ${style === opt.id ? 'text-coral' : 'text-charcoal'}`}>{opt.label}</span>
+                    <span className={`block font-bold text-sm ${style.toLowerCase() === opt.id.toLowerCase() ? 'text-coral' : 'text-charcoal'}`}>{opt.label}</span>
                     <span className="block text-xs text-muted mt-0.5">{opt.desc}</span>
                   </div>
                 </motion.label>
@@ -243,10 +276,31 @@ export default function MoodPreferences() {
       </div>
 
       <Reveal delay={0.3}>
-        <div className="flex justify-end pt-6 border-t border-muted/30">
-          <Button onClick={handleSave} isLoading={isSaving} className="w-full md:w-auto px-10 shadow-lg shadow-teal/30 text-base">
-            Save Preferences
-          </Button>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-muted/30">
+          <div className="text-sm text-muted">
+            {saveSuccess && (
+              <span className="text-teal font-semibold flex items-center gap-1.5 animate-pulse">
+                <Check className="w-4 h-4" /> Preferences saved! Places & Hotels updated.
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button 
+              variant="outline" 
+              onClick={() => handleSave(false)} 
+              isLoading={isSaving} 
+              className="flex-1 sm:flex-none px-6 text-sm border-muted/40"
+            >
+              Save Preferences
+            </Button>
+            <Button 
+              onClick={() => handleSave(true)} 
+              isLoading={isSaving} 
+              className="flex-1 sm:flex-none px-8 shadow-lg shadow-teal/30 text-sm bg-teal hover:bg-teal/90 text-white flex items-center gap-2"
+            >
+              <Compass className="w-4 h-4" /> Save & Explore Places
+            </Button>
+          </div>
         </div>
       </Reveal>
     </PageTransition>

@@ -12,10 +12,15 @@ public class ActivityRequest {
     private Double estimatedCost;
     private String duration;
     private Boolean isOutdoor;
+    private String imageUrl;
 
     public ActivityRequest() {}
 
     public ActivityRequest(Long dayId, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor) {
+        this(dayId, time, title, category, location, estimatedCost, duration, isOutdoor, null);
+    }
+
+    public ActivityRequest(Long dayId, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor, String imageUrl) {
         this.dayId = dayId;
         this.time = time;
         this.title = title;
@@ -24,6 +29,7 @@ public class ActivityRequest {
         this.estimatedCost = estimatedCost;
         this.duration = duration;
         this.isOutdoor = isOutdoor;
+        this.imageUrl = imageUrl;
     }
 
     public Long getDayId() {
@@ -94,4 +100,11 @@ public class ActivityRequest {
         this.isOutdoor = isOutdoor;
     }
 
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
 }

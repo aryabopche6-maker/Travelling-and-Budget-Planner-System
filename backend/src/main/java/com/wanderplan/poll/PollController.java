@@ -43,4 +43,14 @@ public class PollController {
         PollResponse poll = pollService.castVote(tripId, pollId, userPrincipal.getId(), request);
         return ResponseEntity.ok(ApiResponse.success("Vote recorded successfully", poll));
     }
+
+    @PostMapping("/{pollId}/lock")
+    public ResponseEntity<ApiResponse<PollResponse>> lockPoll(
+            @PathVariable Long tripId,
+            @PathVariable Long pollId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) Long optionId) {
+        PollResponse poll = pollService.lockPoll(tripId, pollId, userPrincipal.getId(), optionId);
+        return ResponseEntity.ok(ApiResponse.success("Poll locked successfully", poll));
+    }
 }

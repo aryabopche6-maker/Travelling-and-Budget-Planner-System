@@ -60,6 +60,7 @@ export const tripService = {
   // Invitation methods
   inviteMember: async (tripId, email) => {
     const response = await api.post(`/trips/${tripId}/invitations`, { email });
+    // Returns full ApiResponse so frontend can access .data.acceptUrl
     return response.data;
   },
 

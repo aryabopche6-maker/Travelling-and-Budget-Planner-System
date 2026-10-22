@@ -1,6 +1,5 @@
 package com.wanderplan.itinerary;
 
-
 public class ItineraryActivityDto {
     private Long id;
     private String time;
@@ -11,10 +10,15 @@ public class ItineraryActivityDto {
     private String duration;
     private Boolean isOutdoor;
     private Integer orderIndex;
+    private String imageUrl;
 
     public ItineraryActivityDto() {}
 
     public ItineraryActivityDto(Long id, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor, Integer orderIndex) {
+        this(id, time, title, category, location, estimatedCost, duration, isOutdoor, orderIndex, null);
+    }
+
+    public ItineraryActivityDto(Long id, String time, String title, String category, String location, Double estimatedCost, String duration, Boolean isOutdoor, Integer orderIndex, String imageUrl) {
         this.id = id;
         this.time = time;
         this.title = title;
@@ -24,6 +28,7 @@ public class ItineraryActivityDto {
         this.duration = duration;
         this.isOutdoor = isOutdoor;
         this.orderIndex = orderIndex;
+        this.imageUrl = imageUrl;
     }
 
     public Long getId() {
@@ -86,6 +91,10 @@ public class ItineraryActivityDto {
         return isOutdoor;
     }
 
+    public Boolean getIsOutdoor() {
+        return isOutdoor;
+    }
+
     public void setIsOutdoor(Boolean isOutdoor) {
         this.isOutdoor = isOutdoor;
     }
@@ -96,6 +105,14 @@ public class ItineraryActivityDto {
 
     public void setOrderIndex(Integer orderIndex) {
         this.orderIndex = orderIndex;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 
     public static ItineraryActivityDtoBuilder builder() {
@@ -112,6 +129,7 @@ public class ItineraryActivityDto {
         private String duration;
         private Boolean isOutdoor;
         private Integer orderIndex;
+        private String imageUrl;
 
         public ItineraryActivityDtoBuilder() {}
 
@@ -160,9 +178,13 @@ public class ItineraryActivityDto {
             return this;
         }
 
+        public ItineraryActivityDtoBuilder imageUrl(String imageUrl) {
+            this.imageUrl = imageUrl;
+            return this;
+        }
+
         public ItineraryActivityDto build() {
-            return new ItineraryActivityDto(this.id, this.time, this.title, this.category, this.location, this.estimatedCost, this.duration, this.isOutdoor, this.orderIndex);
+            return new ItineraryActivityDto(this.id, this.time, this.title, this.category, this.location, this.estimatedCost, this.duration, this.isOutdoor, this.orderIndex, this.imageUrl);
         }
     }
-
 }

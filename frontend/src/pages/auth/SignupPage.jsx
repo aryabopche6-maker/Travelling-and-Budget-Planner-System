@@ -108,7 +108,7 @@ export default function SignupPage() {
         <p className="mt-2 text-center text-sm text-secondary">
           Already have an account?{' '}
           <Link
-            to={inviteToken ? `/login?inviteToken=${inviteToken}` : '/login'}
+            to={inviteToken ? `/login?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : '/login'}
             className="font-medium text-teal hover:text-teal-600"
           >
             Log in

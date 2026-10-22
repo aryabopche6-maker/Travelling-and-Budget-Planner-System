@@ -1,3 +1,8 @@
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\activity\ActivityFeed.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\activity\ActivityFeedController.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\activity\ActivityFeedRepository.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\activity\ActivityFeedResponse.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\activity\ActivityFeedService.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\auth\AuthController.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\auth\AuthResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\auth\AuthService.java
@@ -55,6 +60,10 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\iti
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\ItineraryDayRepository.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\ItineraryResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\ItineraryService.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\TripSelectedHotel.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\TripSelectedHotelRepository.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\TripSelectedPlace.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\itinerary\TripSelectedPlaceRepository.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\mail\EmailService.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\member\InviteMemberRequest.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\member\MemberController.java
@@ -95,6 +104,13 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSRequest.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSService.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\CreateSuggestionRequest.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\ReviewSuggestionRequest.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\SuggestionController.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\SuggestionResponse.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\SuggestionService.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\TripSuggestion.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\suggestion\TripSuggestionRepository.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\surpriseme\SurpriseMeController.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\surpriseme\SurpriseMeRequest.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\surpriseme\SurpriseMeResponse.java

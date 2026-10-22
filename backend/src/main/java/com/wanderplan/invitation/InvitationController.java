@@ -43,6 +43,15 @@ public class InvitationController {
         return ResponseEntity.ok(ApiResponse.success("Invitation cancelled successfully"));
     }
 
+    @PostMapping("/trips/{tripId}/invitations/{invitationId}/resend")
+    public ResponseEntity<ApiResponse<InvitationResponse>> resendInvitation(
+            @PathVariable Long tripId,
+            @PathVariable Long invitationId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        InvitationResponse response = invitationService.resendInvitation(tripId, invitationId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Invitation resent successfully", response));
+    }
+
     @GetMapping("/invitations/verify")
     public ResponseEntity<ApiResponse<InvitationDetailResponse>> verifyInvitation(
             @RequestParam String token) {

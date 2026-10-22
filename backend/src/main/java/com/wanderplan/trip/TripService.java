@@ -2,6 +2,7 @@ package com.wanderplan.trip;
 
 import com.wanderplan.exception.ForbiddenException;
 import com.wanderplan.exception.ResourceNotFoundException;
+import com.wanderplan.itinerary.ItineraryDayRepository;
 import com.wanderplan.member.MemberResponse;
 import com.wanderplan.member.TripMember;
 import com.wanderplan.member.TripMemberRepository;
@@ -30,6 +31,9 @@ public class TripService {
 
     @Autowired
     private PreferenceRepository preferenceRepository;
+
+    @Autowired
+    private ItineraryDayRepository itineraryDayRepository;
 
     @Transactional
     public TripResponse createTrip(Long userId, CreateTripRequest request) {
@@ -97,6 +101,10 @@ public class TripService {
 
         validateTripAdmin(tripId, userId);
 
+        boolean datesOrDestChanged = (request.getStartDate() != null && !request.getStartDate().equals(trip.getStartDate()))
+                || (request.getEndDate() != null && !request.getEndDate().equals(trip.getEndDate()))
+                || (request.getDestination() != null && !request.getDestination().equalsIgnoreCase(trip.getDestination()));
+
         if (request.getDestination() != null) trip.setDestination(request.getDestination());
         if (request.getStartingLocation() != null) trip.setStartingLocation(request.getStartingLocation());
         if (request.getStartDate() != null) trip.setStartDate(request.getStartDate());
@@ -112,6 +120,15 @@ public class TripService {
             preferenceRepository.deleteByTripId(tripId);
             for (String interest : request.getInterests()) {
                 preferenceRepository.save(Preference.builder().trip(trip).name(interest).build());
+            }
+        }
+
+        if (datesOrDestChanged) {
+            try {
+                // Clear old days so next itinerary load generates new days matching updated duration
+                itineraryDayRepository.deleteByTripId(tripId);
+            } catch (Exception e) {
+                // Ignore if repository clean fails
             }
         }
 

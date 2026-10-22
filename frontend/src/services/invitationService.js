@@ -1,3 +1,4 @@
+// src/services/invitationService.js
 import api from './api';
 
 export const invitationService = {
@@ -13,6 +14,18 @@ export const invitationService = {
 
   declineInvitation: async (token) => {
     const response = await api.post(`/invitations/decline?token=${token}`);
+    return response.data;
+  },
+
+  // New: resend a cancelled or expired invitation (admin only)
+  resendInvitation: async (tripId, invitationId) => {
+    const response = await api.post(`/trips/${tripId}/invitations/${invitationId}/resend`);
+    return response.data?.data;
+  },
+
+  // Existing: delete invitation
+  deleteInvitation: async (tripId, invitationId) => {
+    const response = await api.delete(`/trips/${tripId}/invitations/${invitationId}`);
     return response.data;
   }
 };

@@ -1,5 +1,6 @@
 package com.wanderplan.invitation;
 
+import com.wanderplan.activity.ActivityFeedService;
 import com.wanderplan.exception.BadRequestException;
 import com.wanderplan.exception.ResourceNotFoundException;
 import com.wanderplan.mail.EmailService;
@@ -41,8 +42,14 @@ public class InvitationService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private ActivityFeedService activityFeedService;
+
     @Value("${app.invitation.expiry-days:7}")
     private int expiryDays;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     @Transactional
     public InvitationResponse sendInvitation(Long tripId, Long adminUserId, SendInvitationRequest request) {
@@ -86,6 +93,12 @@ public class InvitationService {
         // 4. Dispatch actual email
         emailService.sendTripInvitationEmail(invitation);
 
+        // 5. Log activity
+        activityFeedService.logActivity(tripId, adminUserId, adminUser.getName(),
+                "INVITATION_SENT",
+                adminUser.getName() + " invited " + normalizedEmail + " to the trip",
+                "Mail", "MEMBER");
+
         return mapToResponse(invitation);
     }
 
@@ -109,6 +122,57 @@ public class InvitationService {
 
         invitation.setStatus(InvitationStatus.CANCELLED);
         invitationRepository.save(invitation);
+    }
+
+    @Transactional
+    public InvitationResponse resendInvitation(Long tripId, Long invitationId, Long adminUserId) {
+        tripService.validateTripAdmin(tripId, adminUserId);
+
+        TripInvitation oldInvitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found"));
+
+        if (!oldInvitation.getTrip().getId().equals(tripId)) {
+            throw new BadRequestException("Invitation does not belong to this trip");
+        }
+
+        // Mark old invitation as cancelled
+        oldInvitation.setStatus(InvitationStatus.CANCELLED);
+        invitationRepository.save(oldInvitation);
+
+        // Check if already a member
+        String email = oldInvitation.getInvitedEmail();
+        userRepository.findByEmail(email).ifPresent(user -> {
+            if (tripMemberRepository.existsByTripIdAndUserId(tripId, user.getId())) {
+                throw new BadRequestException("User (" + email + ") is already a member of this trip.");
+            }
+        });
+
+        // Create fresh invitation
+        User adminUser = userRepository.findById(adminUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Admin user not found"));
+
+        String token = UUID.randomUUID().toString();
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(expiryDays);
+
+        TripInvitation newInvitation = TripInvitation.builder()
+                .trip(oldInvitation.getTrip())
+                .invitedEmail(email)
+                .invitedBy(adminUser)
+                .token(token)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(expiresAt)
+                .build();
+
+        newInvitation = invitationRepository.save(newInvitation);
+
+        emailService.sendTripInvitationEmail(newInvitation);
+
+        activityFeedService.logActivity(tripId, adminUserId, adminUser.getName(),
+                "INVITATION_RESENT",
+                adminUser.getName() + " resent invitation to " + email,
+                "RefreshCw", "MEMBER");
+
+        return mapToResponse(newInvitation);
     }
 
     public InvitationDetailResponse verifyInvitationToken(String token) {
@@ -185,6 +249,12 @@ public class InvitationService {
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation = invitationRepository.save(invitation);
 
+        // Log activity
+        activityFeedService.logActivity(trip.getId(), currentUserId, currentUser.getName(),
+                "MEMBER_JOINED",
+                currentUser.getName() + " joined the trip!",
+                "UserPlus", "MEMBER");
+
         return mapToResponse(invitation);
     }
 
@@ -202,6 +272,7 @@ public class InvitationService {
     }
 
     private InvitationResponse mapToResponse(TripInvitation inv) {
+        String acceptUrl = frontendUrl + "/invitations/accept?token=" + inv.getToken();
         return InvitationResponse.builder()
                 .id(inv.getId())
                 .tripId(inv.getTrip().getId())
@@ -211,6 +282,7 @@ public class InvitationService {
                 .status(inv.getStatus())
                 .createdAt(inv.getCreatedAt())
                 .expiresAt(inv.getExpiresAt())
+                .acceptUrl(acceptUrl)
                 .build();
     }
 }

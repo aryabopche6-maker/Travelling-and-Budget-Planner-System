@@ -13,10 +13,19 @@ public class HotelResponse {
     private String currency;
     private List<String> amenities;
     private String availabilityStatus;
+    private String hotelType; // Hotel, Resort, Hostel, Boutique, Villa
+    private String matchedMood;
+    private Integer matchScore;
+    private Double latitude;
+    private Double longitude;
 
     public HotelResponse() {}
 
     public HotelResponse(String id, String name, String imageUrl, Double rating, String location, Double pricePerNight, String currency, List<String> amenities, String availabilityStatus) {
+        this(id, name, imageUrl, rating, location, pricePerNight, currency, amenities, availabilityStatus, "Hotel", null, 0, null, null);
+    }
+
+    public HotelResponse(String id, String name, String imageUrl, Double rating, String location, Double pricePerNight, String currency, List<String> amenities, String availabilityStatus, String hotelType, String matchedMood, Integer matchScore, Double latitude, Double longitude) {
         this.id = id;
         this.name = name;
         this.imageUrl = imageUrl;
@@ -26,6 +35,11 @@ public class HotelResponse {
         this.currency = currency;
         this.amenities = amenities;
         this.availabilityStatus = availabilityStatus;
+        this.hotelType = hotelType != null ? hotelType : "Hotel";
+        this.matchedMood = matchedMood;
+        this.matchScore = matchScore != null ? matchScore : 0;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public String getId() {
@@ -100,6 +114,46 @@ public class HotelResponse {
         this.availabilityStatus = availabilityStatus;
     }
 
+    public String getHotelType() {
+        return hotelType;
+    }
+
+    public void setHotelType(String hotelType) {
+        this.hotelType = hotelType;
+    }
+
+    public String getMatchedMood() {
+        return matchedMood;
+    }
+
+    public void setMatchedMood(String matchedMood) {
+        this.matchedMood = matchedMood;
+    }
+
+    public Integer getMatchScore() {
+        return matchScore;
+    }
+
+    public void setMatchScore(Integer matchScore) {
+        this.matchScore = matchScore;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+
     public static HotelResponseBuilder builder() {
         return new HotelResponseBuilder();
     }
@@ -114,6 +168,11 @@ public class HotelResponse {
         private String currency;
         private List<String> amenities;
         private String availabilityStatus;
+        private String hotelType;
+        private String matchedMood;
+        private Integer matchScore;
+        private Double latitude;
+        private Double longitude;
 
         public HotelResponseBuilder() {}
 
@@ -162,8 +221,33 @@ public class HotelResponse {
             return this;
         }
 
+        public HotelResponseBuilder hotelType(String hotelType) {
+            this.hotelType = hotelType;
+            return this;
+        }
+
+        public HotelResponseBuilder matchedMood(String matchedMood) {
+            this.matchedMood = matchedMood;
+            return this;
+        }
+
+        public HotelResponseBuilder matchScore(Integer matchScore) {
+            this.matchScore = matchScore;
+            return this;
+        }
+
+        public HotelResponseBuilder latitude(Double latitude) {
+            this.latitude = latitude;
+            return this;
+        }
+
+        public HotelResponseBuilder longitude(Double longitude) {
+            this.longitude = longitude;
+            return this;
+        }
+
         public HotelResponse build() {
-            return new HotelResponse(this.id, this.name, this.imageUrl, this.rating, this.location, this.pricePerNight, this.currency, this.amenities, this.availabilityStatus);
+            return new HotelResponse(this.id, this.name, this.imageUrl, this.rating, this.location, this.pricePerNight, this.currency, this.amenities, this.availabilityStatus, this.hotelType, this.matchedMood, this.matchScore, this.latitude, this.longitude);
         }
     }
 

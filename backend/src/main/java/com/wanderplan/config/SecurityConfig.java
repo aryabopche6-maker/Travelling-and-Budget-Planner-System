@@ -78,7 +78,7 @@ public class SecurityConfig {
             .headers(headers -> headers.frameOptions(frame -> frame.disable())) // For H2 console
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/api/invitations/verify/**", "/api/invitations/decline/**", "/h2-console/**").permitAll()
+                .requestMatchers("/api/auth/**", "/api/invitations/verify", "/api/invitations/verify/**", "/api/invitations/decline", "/api/invitations/decline/**", "/h2-console/**").permitAll()
                 .anyRequest().authenticated()
             );
 

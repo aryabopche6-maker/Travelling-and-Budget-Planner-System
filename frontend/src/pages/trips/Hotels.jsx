@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, Wifi, Coffee, Wind, Info, Hotel, Filter, RefreshCw, Sparkles, ExternalLink, Building2, Crosshair } from 'lucide-react';
+import { Search, MapPin, Star, Wifi, Coffee, Wind, Info, Hotel, Filter, RefreshCw, Sparkles, ExternalLink, Building2, Crosshair, Check, CheckCircle2 } from 'lucide-react';
 import { useTrip } from '../../context/TripContext';
 import { tripService } from '../../services/tripService';
+import { itineraryService } from '../../services/itineraryService';
 import api from '../../services/api';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -15,13 +16,47 @@ export default function Hotels() {
   const [hotels, setHotels] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
   const [isExternalConfigured, setIsExternalConfigured] = useState(false);
+
+  // Selected Hotel state
+  const [selectedHotel, setSelectedHotel] = useState(null);
+  const [isSelectingHotel, setIsSelectingHotel] = useState(false);
 
   const [searchAreaInput, setSearchAreaInput] = useState('');
   const [activeSearchArea, setActiveSearchArea] = useState('');
-  const [radius, setRadius] = useState(5);
+  const [radius, setRadius] = useState(10);
 
-  const fetchHotels = async (location = '', r = 5) => {
+  const loadSavedHotel = async () => {
+    if (!trip?.id) return;
+    try {
+      const saved = await itineraryService.getSelectedHotel(trip.id);
+      setSelectedHotel(saved || null);
+    } catch (err) {
+      console.warn("Could not load saved hotel:", err);
+    }
+  };
+
+  const handleSelectHotel = async (hotel) => {
+    if (!trip?.id || !hotel?.name) return;
+    setIsSelectingHotel(true);
+    try {
+      if (selectedHotel && selectedHotel.name?.toLowerCase() === hotel.name?.toLowerCase()) {
+        // Deselect
+        await itineraryService.removeSelectedHotel(trip.id);
+        setSelectedHotel(null);
+      } else {
+        const saved = await itineraryService.selectHotel(trip.id, hotel);
+        setSelectedHotel(saved);
+      }
+    } catch (err) {
+      console.error("Failed to update selected hotel:", err);
+    } finally {
+      setIsSelectingHotel(false);
+    }
+  };
+
+  const fetchHotels = async (location = '', r = 10) => {
     setIsLoading(true);
     try {
       const data = await tripService.getHotels(trip.id, location, r);
@@ -39,8 +74,9 @@ export default function Hotels() {
   useEffect(() => {
     if (trip?.id) {
       fetchHotels();
+      loadSavedHotel();
     }
-  }, [trip?.id]);
+  }, [trip?.id, trip?.interests]);
 
   const handleSearchArea = (e) => {
     e.preventDefault();
@@ -48,10 +84,35 @@ export default function Hotels() {
     fetchHotels(searchAreaInput, radius);
   };
 
+  const handleClearArea = () => {
+    setSearchAreaInput('');
+    setActiveSearchArea('');
+    fetchHotels('', radius);
+  };
+
+  const userInterests = trip?.interests && Array.isArray(trip.interests) ? trip.interests : [];
+  const hotelTypes = ['All', 'Resort', 'Hotel', 'Boutique Hotel', 'Guest House', 'Hostel', 'Villa'];
+
   const filteredHotels = hotels.filter(hotel => {
-    return !search || 
-      (hotel.name && hotel.name.toLowerCase().includes(search.toLowerCase())) ||
-      (hotel.location && hotel.location.toLowerCase().includes(search.toLowerCase()));
+    if (typeFilter !== 'All') {
+      const target = typeFilter.toLowerCase();
+      const typeMatch = hotel.hotelType && hotel.hotelType.toLowerCase().includes(target);
+      const nameMatch = hotel.name && hotel.name.toLowerCase().includes(target);
+      const moodMatch = hotel.matchedMood && hotel.matchedMood.toLowerCase().includes(target);
+      if (!typeMatch && !nameMatch && !moodMatch) return false;
+    }
+
+    if (search) {
+      const s = search.toLowerCase();
+      const matchesSearch = 
+        (hotel.name && hotel.name.toLowerCase().includes(s)) ||
+        (hotel.location && hotel.location.toLowerCase().includes(s)) ||
+        (hotel.hotelType && hotel.hotelType.toLowerCase().includes(s)) ||
+        (hotel.matchedMood && hotel.matchedMood.toLowerCase().includes(s));
+      if (!matchesSearch) return false;
+    }
+
+    return true;
   });
 
   return (
@@ -63,15 +124,30 @@ export default function Hotels() {
               <Hotel className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-3xl font-bold tracking-tight font-display text-charcoal">
-                  {activeSearchArea ? `Hotels near ${activeSearchArea}` : 'Find Your Stay'}
+                  {activeSearchArea ? `Hotels in ${activeSearchArea}` : 'Find Your Stay'}
                 </h1>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-teal/10 text-teal rounded-full border border-teal/20 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> {isExternalConfigured ? 'Amadeus Live API' : 'Live OSM Accommodations'}
+                  <Sparkles className="w-3 h-3" /> {isExternalConfigured ? 'Amadeus Live API' : 'Live OSM Stays'}
                 </span>
+                {hotels.length > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-charcoal/10 text-charcoal rounded-full">
+                    {hotels.length} Stays Found
+                  </span>
+                )}
+                {selectedHotel && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 bg-emerald-500 text-white rounded-full flex items-center gap-1 shadow-sm">
+                    <CheckCircle2 className="w-3 h-3" /> Stay Selected: {selectedHotel.name}
+                  </span>
+                )}
               </div>
-              <p className="text-muted mt-1">Real accommodations in <strong className="text-charcoal">{activeSearchArea || trip?.destination}</strong></p>
+              <p className="text-muted mt-1">
+                Real accommodations in <strong className="text-charcoal">{activeSearchArea || trip?.destination}</strong> &bull; Selected hotel automatically sets check-in & breakfast in your <strong className="text-teal">Itinerary</strong>!
+                {userInterests.length > 0 && !activeSearchArea && (
+                  <span> &bull; Matching vibe: <span className="text-teal font-semibold">{userInterests.join(', ')}</span></span>
+                )}
+              </p>
             </div>
           </div>
           
@@ -79,7 +155,7 @@ export default function Hotels() {
             <div className="relative flex-1">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <Input 
-                placeholder="Filter hotels..." 
+                placeholder="Filter hotels or resort..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10 bg-bg border-muted/30"
@@ -89,57 +165,119 @@ export default function Hotels() {
         </div>
       </Reveal>
 
+      {/* Mood Preference Banner */}
+      {userInterests.length > 0 && (
+        <Reveal delay={0.03}>
+          <div className="p-3.5 bg-teal/5 border border-teal/20 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-teal shrink-0" />
+              <span className="text-charcoal font-medium">
+                Tailored for your <strong>{trip?.destination}</strong> vibe:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {userInterests.map((interest) => (
+                  <span key={interest} className="px-2.5 py-0.5 rounded-full bg-teal text-white text-xs font-semibold shadow-xs">
+                    {interest}
+                  </span>
+                ))}
+                {trip?.travelStyle && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-coral-500/10 border border-coral/30 text-coral text-xs font-semibold">
+                    {trip.travelStyle} Stay
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className="text-xs text-muted">
+              Stays fitting your style appear first!
+            </span>
+          </div>
+        </Reveal>
+      )}
+
       <Reveal delay={0.05}>
         <Card className="p-4 bg-bg border-muted/30">
           <form onSubmit={handleSearchArea} className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-teal" />
               <Input 
-                placeholder="Enter specific area (e.g. Banjara Hills)" 
+                placeholder="Enter specific area/beach/locality (e.g. Banjara Hills, Candolim, Old City)" 
                 value={searchAreaInput}
                 onChange={(e) => setSearchAreaInput(e.target.value)}
                 className="pl-10 bg-white border-muted/30"
               />
             </div>
-            <div className="relative w-full sm:w-40">
+            <div className="relative w-full sm:w-44">
               <Crosshair className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <select 
                 value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
                 className="w-full pl-9 pr-3 py-2.5 bg-white border border-muted/30 rounded-xl text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-teal/50"
               >
-                <option value={2}>Within 2 km</option>
+                <option value={3}>Within 3 km</option>
                 <option value={5}>Within 5 km</option>
-                <option value={10}>Within 10 km</option>
-                <option value={20}>Within 20 km</option>
+                <option value={10}>Within 10 km (Standard)</option>
+                <option value={20}>Within 20 km (Wide)</option>
+                <option value={35}>Within 35 km (Full Region)</option>
               </select>
             </div>
-            <Button type="submit" className="bg-teal hover:bg-teal/90 text-white shadow-sm shrink-0">
-              Search Area
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" className="bg-teal hover:bg-teal/90 text-white shadow-sm shrink-0">
+                Search Area
+              </Button>
+              {activeSearchArea && (
+                <Button type="button" variant="outline" onClick={handleClearArea} className="border-muted/40 text-muted shrink-0">
+                  Reset
+                </Button>
+              )}
+            </div>
           </form>
         </Card>
       </Reveal>
 
-      <Reveal delay={0.1}>
-        <div className="bg-teal/5 border border-teal/15 rounded-2xl p-4 flex items-start gap-3">
-          <Info className="w-5 h-5 text-teal shrink-0 mt-0.5" />
-          <p className="text-sm text-muted leading-relaxed">
-            Real hotel and resort listings fetched live from OpenStreetMap and Amadeus APIs. Exact dynamic room rates and live availability are fetched when commercial Amadeus credentials are provided in the backend.
-          </p>
+      {/* Stay Type Filters */}
+      <Reveal delay={0.08}>
+        <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
+          {hotelTypes.map(type => (
+            <motion.button
+              key={type}
+              onClick={() => setTypeFilter(type)}
+              whileTap={{ scale: 0.95 }}
+              className={`px-5 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300 border ${
+                typeFilter === type 
+                  ? 'bg-teal text-white border-teal shadow-lg shadow-teal/30' 
+                  : 'bg-bg text-muted border-muted/30 hover:border-teal/50 hover:text-charcoal'
+              }`}
+            >
+              {type}
+            </motion.button>
+          ))}
         </div>
       </Reveal>
 
       {isLoading ? (
-        <div className="py-16 text-center text-teal flex flex-col items-center gap-3">
-          <RefreshCw className="w-8 h-8 animate-spin" />
-          <p className="text-muted font-medium">Querying live accommodation databases...</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-center gap-2 text-sm text-teal font-medium py-2">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>Finding best stays in {activeSearchArea || trip?.destination}...</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div key={n} className="rounded-2xl border border-muted/20 bg-white p-5 shadow-sm animate-pulse space-y-4">
+                <div className="h-44 bg-muted/15 rounded-xl w-full" />
+                <div className="space-y-2">
+                  <div className="h-5 bg-muted/20 rounded w-2/3" />
+                  <div className="h-4 bg-muted/10 rounded w-1/3" />
+                </div>
+                <div className="h-10 bg-muted/10 rounded-xl w-full" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : filteredHotels.length === 0 ? (
         <div className="py-12 text-center text-muted">
           <Building2 className="w-12 h-12 mx-auto mb-3 opacity-40 text-teal" />
           <h3 className="text-lg font-bold text-charcoal mb-1">No accommodations found</h3>
-          <p className="text-sm">Try modifying your search criteria.</p>
+          <p className="text-sm">Try modifying your locality search or expanding the radius.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -157,11 +295,27 @@ export default function Hotels() {
                       <span className="text-xs font-semibold text-teal/80">Verified Accommodation</span>
                     </div>
                   )}
+
+                  <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 items-center">
+                    <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-bold text-charcoal border border-white/40 uppercase tracking-wider shadow-sm">
+                      {hotel.hotelType || 'Hotel'}
+                    </span>
+                    {hotel.matchedMood && (
+                      <span className="bg-teal text-white px-2 py-1 rounded text-[10px] font-bold border border-teal/40 uppercase tracking-wider shadow-sm flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> {hotel.matchedMood}
+                      </span>
+                    )}
+                    {selectedHotel && selectedHotel.name?.toLowerCase() === hotel.name?.toLowerCase() && (
+                      <span className="bg-emerald-600 text-white px-2.5 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Selected Stay
+                      </span>
+                    )}
+                  </div>
                   
                   {hotel.rating != null ? (
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 border border-white/40 shadow-sm z-10">
                       <Star className="w-4 h-4 text-golden fill-golden" />
-                      <span className="text-sm font-bold text-charcoal">{hotel.rating} ★</span>
+                      <span className="text-sm font-bold text-charcoal">{hotel.rating.toFixed(1)} ★</span>
                     </div>
                   ) : (
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold text-muted border border-white/40 shadow-sm z-10">
@@ -193,22 +347,45 @@ export default function Hotels() {
                     )}
                   </div>
 
-                  <div className="border-t border-muted/30 pt-4 mt-2 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted mb-0.5">Live Pricing</p>
-                      <p className="font-bold text-base text-teal tracking-tight">
-                        {hotel.pricePerNight != null ? `₹${hotel.pricePerNight} / night` : 'Price on Booking'}
-                      </p>
+                  <div className="border-t border-muted/30 pt-4 mt-2 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-muted mb-0.5">Estimated Rate</p>
+                        <p className="font-bold text-base text-teal tracking-tight">
+                          {hotel.pricePerNight != null ? `₹${hotel.pricePerNight} / night` : 'Price on Booking'}
+                        </p>
+                      </div>
+                      <a 
+                        href={`https://www.google.com/search?q=${encodeURIComponent(hotel.name + ' ' + (hotel.location || trip?.destination))}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                      >
+                        <Button variant="outline" size="sm" className="gap-1.5 border-muted/30 hover:bg-bg hover:border-teal/40 transition-all text-xs">
+                          Book <ExternalLink className="w-3 h-3" />
+                        </Button>
+                      </a>
                     </div>
-                    <a 
-                      href={`https://www.google.com/search?q=${encodeURIComponent(hotel.name + ' ' + (hotel.location || trip?.destination))}`} 
-                      target="_blank" 
-                      rel="noreferrer"
+
+                    {/* Select for Itinerary button */}
+                    <Button
+                      onClick={() => handleSelectHotel(hotel)}
+                      disabled={isSelectingHotel}
+                      className={`w-full py-2.5 text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-1.5 ${
+                        selectedHotel && selectedHotel.name?.toLowerCase() === hotel.name?.toLowerCase()
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                          : 'bg-teal hover:bg-bright text-white shadow-teal/30'
+                      }`}
                     >
-                      <Button variant="outline" size="sm" className="gap-1.5 border-muted/30 hover:bg-bg hover:border-teal/40 transition-all text-xs">
-                        Book <ExternalLink className="w-3 h-3" />
-                      </Button>
-                    </a>
+                      {selectedHotel && selectedHotel.name?.toLowerCase() === hotel.name?.toLowerCase() ? (
+                        <>
+                          <Check className="w-4 h-4" /> Selected as Trip Stay
+                        </>
+                      ) : (
+                        <>
+                          <Hotel className="w-4 h-4" /> Select as My Trip Stay
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </Card>

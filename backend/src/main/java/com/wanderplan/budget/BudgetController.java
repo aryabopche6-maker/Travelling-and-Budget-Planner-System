@@ -60,6 +60,15 @@ public class BudgetController {
         return ResponseEntity.ok(ApiResponse.success("Smart alternatives retrieved", alternatives));
     }
 
+    @PostMapping("/alternatives/{alternativeId}/apply")
+    public ResponseEntity<ApiResponse<Void>> applyAlternative(
+            @PathVariable Long tripId,
+            @PathVariable String alternativeId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        budgetService.applyAlternative(tripId, userPrincipal.getId(), alternativeId);
+        return ResponseEntity.ok(ApiResponse.success("Smart alternative applied to trip planner successfully"));
+    }
+
     @GetMapping("/rescue")
     public ResponseEntity<ApiResponse<BudgetRescueResponse>> getBudgetRescue(
             @PathVariable Long tripId,

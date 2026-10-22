@@ -99,7 +99,10 @@ export default function LoginPage() {
         <h2 className="text-center text-3xl font-extrabold text-charcoal">Welcome back</h2>
         <p className="mt-2 text-center text-sm text-secondary">
           Don't have an account?{' '}
-          <Link to={inviteToken ? `/signup?inviteToken=${inviteToken}` : '/signup'} className="font-medium text-teal hover:text-teal-600">
+          <Link 
+            to={inviteToken ? `/signup?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : '/signup'} 
+            className="font-medium text-teal hover:text-teal-600"
+          >
             Sign up
           </Link>
         </p>

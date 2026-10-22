@@ -27,6 +27,10 @@ public class Poll {
 
         private Boolean isAnonymous = false;
 
+    private Boolean isLocked = false;
+
+    private Long lockedOptionId;
+
     private Long createdBy;
 
     @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -38,12 +42,14 @@ public class Poll {
 
     public Poll() {}
 
-    public Poll(Long id, Trip trip, String title, String category, Boolean isAnonymous, Long createdBy, List<PollOption> options, LocalDateTime createdAt) {
+    public Poll(Long id, Trip trip, String title, String category, Boolean isAnonymous, Boolean isLocked, Long lockedOptionId, Long createdBy, List<PollOption> options, LocalDateTime createdAt) {
         this.id = id;
         this.trip = trip;
         this.title = title;
         this.category = category;
         this.isAnonymous = isAnonymous;
+        this.isLocked = isLocked;
+        this.lockedOptionId = lockedOptionId;
         this.createdBy = createdBy;
         this.options = options;
         this.createdAt = createdAt;
@@ -93,6 +99,22 @@ public class Poll {
         this.isAnonymous = isAnonymous;
     }
 
+    public Boolean getIsLocked() {
+        return isLocked;
+    }
+
+    public void setIsLocked(Boolean isLocked) {
+        this.isLocked = isLocked;
+    }
+
+    public Long getLockedOptionId() {
+        return lockedOptionId;
+    }
+
+    public void setLockedOptionId(Long lockedOptionId) {
+        this.lockedOptionId = lockedOptionId;
+    }
+
     public Long getCreatedBy() {
         return createdBy;
     }
@@ -127,6 +149,8 @@ public class Poll {
         private String title;
         private String category;
         private Boolean isAnonymous;
+        private Boolean isLocked = false;
+        private Long lockedOptionId;
         private Long createdBy;
         private List<PollOption> options;
         private LocalDateTime createdAt;
@@ -158,6 +182,16 @@ public class Poll {
             return this;
         }
 
+        public PollBuilder isLocked(Boolean isLocked) {
+            this.isLocked = isLocked;
+            return this;
+        }
+
+        public PollBuilder lockedOptionId(Long lockedOptionId) {
+            this.lockedOptionId = lockedOptionId;
+            return this;
+        }
+
         public PollBuilder createdBy(Long createdBy) {
             this.createdBy = createdBy;
             return this;
@@ -174,7 +208,7 @@ public class Poll {
         }
 
         public Poll build() {
-            return new Poll(this.id, this.trip, this.title, this.category, this.isAnonymous, this.createdBy, this.options, this.createdAt);
+            return new Poll(this.id, this.trip, this.title, this.category, this.isAnonymous, this.isLocked, this.lockedOptionId, this.createdBy, this.options, this.createdAt);
         }
     }
 

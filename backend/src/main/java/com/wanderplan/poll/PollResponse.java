@@ -13,12 +13,14 @@ public class PollResponse {
     private Long totalVotes;
     private Boolean hasVoted;
     private Long userVotedOptionId;
+    private Boolean isLocked;
+    private Long lockedOptionId;
     private List<PollOptionDto> options;
     private LocalDateTime createdAt;
 
     public PollResponse() {}
 
-    public PollResponse(Long id, String title, String category, Boolean isAnonymous, Long createdBy, Long totalVotes, Boolean hasVoted, Long userVotedOptionId, List<PollOptionDto> options, LocalDateTime createdAt) {
+    public PollResponse(Long id, String title, String category, Boolean isAnonymous, Long createdBy, Long totalVotes, Boolean hasVoted, Long userVotedOptionId, Boolean isLocked, Long lockedOptionId, List<PollOptionDto> options, LocalDateTime createdAt) {
         this.id = id;
         this.title = title;
         this.category = category;
@@ -27,6 +29,8 @@ public class PollResponse {
         this.totalVotes = totalVotes;
         this.hasVoted = hasVoted;
         this.userVotedOptionId = userVotedOptionId;
+        this.isLocked = isLocked;
+        this.lockedOptionId = lockedOptionId;
         this.options = options;
         this.createdAt = createdAt;
     }
@@ -95,6 +99,22 @@ public class PollResponse {
         this.userVotedOptionId = userVotedOptionId;
     }
 
+    public Boolean getIsLocked() {
+        return isLocked;
+    }
+
+    public void setIsLocked(Boolean isLocked) {
+        this.isLocked = isLocked;
+    }
+
+    public Long getLockedOptionId() {
+        return lockedOptionId;
+    }
+
+    public void setLockedOptionId(Long lockedOptionId) {
+        this.lockedOptionId = lockedOptionId;
+    }
+
     public List<PollOptionDto> getOptions() {
         return options;
     }
@@ -124,6 +144,8 @@ public class PollResponse {
         private Long totalVotes;
         private Boolean hasVoted;
         private Long userVotedOptionId;
+        private Boolean isLocked;
+        private Long lockedOptionId;
         private List<PollOptionDto> options;
         private LocalDateTime createdAt;
 
@@ -169,6 +191,16 @@ public class PollResponse {
             return this;
         }
 
+        public PollResponseBuilder isLocked(Boolean isLocked) {
+            this.isLocked = isLocked;
+            return this;
+        }
+
+        public PollResponseBuilder lockedOptionId(Long lockedOptionId) {
+            this.lockedOptionId = lockedOptionId;
+            return this;
+        }
+
         public PollResponseBuilder options(List<PollOptionDto> options) {
             this.options = options;
             return this;
@@ -180,7 +212,7 @@ public class PollResponse {
         }
 
         public PollResponse build() {
-            return new PollResponse(this.id, this.title, this.category, this.isAnonymous, this.createdBy, this.totalVotes, this.hasVoted, this.userVotedOptionId, this.options, this.createdAt);
+            return new PollResponse(this.id, this.title, this.category, this.isAnonymous, this.createdBy, this.totalVotes, this.hasVoted, this.userVotedOptionId, this.isLocked, this.lockedOptionId, this.options, this.createdAt);
         }
     }
 

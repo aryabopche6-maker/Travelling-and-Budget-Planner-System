@@ -15,10 +15,22 @@ public class PlaceResponse {
     private String imageUrl;
     private Double latitude;
     private Double longitude;
+    private String matchedMood;
+    private Integer matchScore;
+    private List<String> tags;
+    private Double distanceKm;
 
     public PlaceResponse() {}
 
     public PlaceResponse(String id, String name, String category, Double rating, String location, Double estimatedCost, String duration, String description, String imageUrl, Double latitude, Double longitude) {
+        this(id, name, category, rating, location, estimatedCost, duration, description, imageUrl, latitude, longitude, null, 0, null, null);
+    }
+
+    public PlaceResponse(String id, String name, String category, Double rating, String location, Double estimatedCost, String duration, String description, String imageUrl, Double latitude, Double longitude, String matchedMood, Integer matchScore, List<String> tags) {
+        this(id, name, category, rating, location, estimatedCost, duration, description, imageUrl, latitude, longitude, matchedMood, matchScore, tags, null);
+    }
+
+    public PlaceResponse(String id, String name, String category, Double rating, String location, Double estimatedCost, String duration, String description, String imageUrl, Double latitude, Double longitude, String matchedMood, Integer matchScore, List<String> tags, Double distanceKm) {
         this.id = id;
         this.name = name;
         this.category = category;
@@ -30,6 +42,10 @@ public class PlaceResponse {
         this.imageUrl = imageUrl;
         this.latitude = latitude;
         this.longitude = longitude;
+        this.matchedMood = matchedMood;
+        this.matchScore = matchScore != null ? matchScore : 0;
+        this.tags = tags;
+        this.distanceKm = distanceKm;
     }
 
     public String getId() {
@@ -120,6 +136,38 @@ public class PlaceResponse {
         this.longitude = longitude;
     }
 
+    public String getMatchedMood() {
+        return matchedMood;
+    }
+
+    public void setMatchedMood(String matchedMood) {
+        this.matchedMood = matchedMood;
+    }
+
+    public Integer getMatchScore() {
+        return matchScore;
+    }
+
+    public void setMatchScore(Integer matchScore) {
+        this.matchScore = matchScore;
+    }
+
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<String> tags) {
+        this.tags = tags;
+    }
+
+    public Double getDistanceKm() {
+        return distanceKm;
+    }
+
+    public void setDistanceKm(Double distanceKm) {
+        this.distanceKm = distanceKm;
+    }
+
     public static PlaceResponseBuilder builder() {
         return new PlaceResponseBuilder();
     }
@@ -136,6 +184,10 @@ public class PlaceResponse {
         private String imageUrl;
         private Double latitude;
         private Double longitude;
+        private String matchedMood;
+        private Integer matchScore;
+        private List<String> tags;
+        private Double distanceKm;
 
         public PlaceResponseBuilder() {}
 
@@ -194,8 +246,28 @@ public class PlaceResponse {
             return this;
         }
 
+        public PlaceResponseBuilder matchedMood(String matchedMood) {
+            this.matchedMood = matchedMood;
+            return this;
+        }
+
+        public PlaceResponseBuilder matchScore(Integer matchScore) {
+            this.matchScore = matchScore;
+            return this;
+        }
+
+        public PlaceResponseBuilder tags(List<String> tags) {
+            this.tags = tags;
+            return this;
+        }
+
+        public PlaceResponseBuilder distanceKm(Double distanceKm) {
+            this.distanceKm = distanceKm;
+            return this;
+        }
+
         public PlaceResponse build() {
-            return new PlaceResponse(this.id, this.name, this.category, this.rating, this.location, this.estimatedCost, this.duration, this.description, this.imageUrl, this.latitude, this.longitude);
+            return new PlaceResponse(this.id, this.name, this.category, this.rating, this.location, this.estimatedCost, this.duration, this.description, this.imageUrl, this.latitude, this.longitude, this.matchedMood, this.matchScore, this.tags, this.distanceKm);
         }
     }
 

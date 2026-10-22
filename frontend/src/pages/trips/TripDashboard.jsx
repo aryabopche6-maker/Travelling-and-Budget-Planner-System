@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTrip } from '../../context/TripContext';
-import { CloudRain, Sun, Wallet, Users, Map, Clock, AlertTriangle, ChevronRight } from 'lucide-react';
+import { CloudRain, Sun, Wallet, Users, Map, Clock, AlertTriangle, ChevronRight, Calendar } from 'lucide-react';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import PageTransition from '../../components/common/PageTransition';
@@ -10,13 +10,27 @@ import AnimatedNumber from '../../components/animations/AnimatedNumber';
 import ParallaxImage from '../../components/animations/ParallaxImage';
 import { Link } from 'react-router-dom';
 import { getDestinationImage } from '../../utils/destinationImages';
+import { budgetService } from '../../services/budgetService';
 
 export default function TripDashboard() {
   const { trip, isTripAdmin } = useTrip();
+  const [liveBudget, setLiveBudget] = useState(null);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+    budgetService.getBudget(trip.id).then(res => {
+      if (res) setLiveBudget(res);
+    }).catch(err => console.error("Dashboard: error loading budget", err));
+  }, [trip?.id, trip?.budget]);
 
   if (!trip) return null;
 
-  const progressPercent = Math.min(((trip.spent || trip.spentBudget || 0) / (trip.budget || trip.totalBudget || 1)) * 100, 100);
+  const totalBudgetVal = liveBudget?.totalBudget ?? (trip.budget || trip.totalBudget || 0);
+  const totalSpentVal = liveBudget?.spent ?? (trip.spent || trip.spentBudget || 0);
+  const remainingVal = liveBudget?.remainingBudget ?? (totalBudgetVal - totalSpentVal);
+  const hiddenCostVal = liveBudget?.hiddenCosts ?? 11700;
+
+  const progressPercent = Math.min((totalSpentVal / Math.max(1, totalBudgetVal)) * 100, 100);
   const isBudgetTight = progressPercent > 85;
 
   return (
@@ -105,8 +119,8 @@ export default function TripDashboard() {
         </div>
       </Reveal>
 
-      {/* Alerts / Budget Warning */}
-      {isBudgetTight && (
+      {/* Alerts / Budget Warning — Admin only */}
+      {isTripAdmin && isBudgetTight && (
         <Reveal delay={0.2}>
           <motion.div 
             initial={{ opacity: 0, y: 10 }} 
@@ -132,7 +146,8 @@ export default function TripDashboard() {
         
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Budget Overview */}
+          {/* Budget Overview — Admin Only */}
+          {isTripAdmin && (
           <Reveal delay={0.1}>
             <Card glass delay={0.1} className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -148,24 +163,27 @@ export default function TripDashboard() {
                 <div>
                   <p className="text-sm text-muted mb-1">Total Budget</p>
                   <p className="text-xl font-bold text-charcoal">
-                    ₹<AnimatedNumber value={(trip.budget || trip.totalBudget || 0) / 1000} suffix="k" delay={0.2} />
+                    ₹<AnimatedNumber value={totalBudgetVal} delay={0.2} />
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted mb-1">Spent</p>
                   <p className="text-xl font-bold text-charcoal">
-                    ₹<AnimatedNumber value={(trip.spent || trip.spentBudget || 0) / 1000} suffix="k" delay={0.3} />
+                    ₹<AnimatedNumber value={totalSpentVal} delay={0.3} />
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted mb-1">Remaining</p>
-                  <p className="text-xl font-bold text-teal">
-                    ₹<AnimatedNumber value={((trip.budget || trip.totalBudget || 0) - (trip.spent || trip.spentBudget || 0)) / 1000} suffix="k" delay={0.4} />
+                  <p className={`text-xl font-bold ${remainingVal >= 0 ? 'text-teal' : 'text-coral'}`}>
+                    ₹<AnimatedNumber value={Math.abs(remainingVal)} delay={0.4} />
+                    {remainingVal < 0 && <span className="text-xs ml-1">(Over)</span>}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted mb-1">Hidden Costs</p>
-                  <p className="text-xl font-bold text-golden">₹12.5k</p>
+                  <p className="text-xl font-bold text-golden">
+                    ₹<AnimatedNumber value={hiddenCostVal} delay={0.5} />
+                  </p>
                 </div>
               </div>
 
@@ -189,6 +207,36 @@ export default function TripDashboard() {
               </div>
             </Card>
           </Reveal>
+          )}
+
+          {/* Member Welcome Card — shown only for non-admin members */}
+          {!isTripAdmin && (
+          <Reveal delay={0.1}>
+            <Card glass delay={0.1} className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2.5 bg-blue-500/15 rounded-xl text-blue-500">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-charcoal">Welcome to {trip.destination}!</h3>
+                  <p className="text-sm text-muted">You're a member of this trip. Explore the itinerary, vote on plans, and track shared expenses.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <Link to={`/trips/${trip.id}/itinerary`}>
+                  <Button variant="outline" className="w-full">
+                    <Calendar className="w-4 h-4 mr-2" /> View Itinerary
+                  </Button>
+                </Link>
+                <Link to={`/trips/${trip.id}/expenses`}>
+                  <Button variant="outline" className="w-full">
+                    <Wallet className="w-4 h-4 mr-2" /> Expenses
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          </Reveal>
+          )}
 
           {/* Planning Progress & Next Activity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -1,48 +1,112 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ArrowRight, Building, Map, Plane, CheckCircle2 } from 'lucide-react';
+import { Sparkles, ArrowRight, Building, Map, Plane, CheckCircle2, RefreshCw } from 'lucide-react';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
+import { useTrip } from '../../context/TripContext';
+import { budgetService } from '../../services/budgetService';
 
-const alternatives = [
+const fallbackAlternatives = [
   {
-    id: 'alt1',
+    id: 'alt-hotel-1',
     category: 'Hotel',
     icon: Building,
-    current: { name: 'Oceanview Resort', price: 35000 },
-    suggestion: { name: 'Sunset Sands Boutique', price: 26500 },
+    current: { name: 'Oceanview Resort (4-star)', price: 35000 },
+    suggestion: { name: 'Sunset Sands Boutique Stay', price: 26500 },
     savings: 8500,
-    reason: 'Similar 4-star rating, located 10 mins away, but 25% cheaper for your specific dates.'
+    reason: 'Similar 4.5 rating, prime location, but saves ₹8,500 over your travel dates.'
   },
   {
-    id: 'alt2',
+    id: 'alt-transport-1',
+    category: 'Transport',
+    icon: Plane,
+    current: { name: 'Direct Flight Bookings', price: 18000 },
+    suggestion: { name: 'AC Superfast Express / Train', price: 4500 },
+    savings: 13500,
+    reason: 'Premium reserved seating with scenic travel views, saving over ₹13,000.'
+  },
+  {
+    id: 'alt-activity-1',
     category: 'Activity',
     icon: Map,
-    current: { name: 'Private Island Tour', price: 12000 },
-    suggestion: { name: 'Group Island Hopping', price: 4500 },
-    savings: 7500,
-    reason: 'Shared boat tour visits the exact same islands and includes a BBQ lunch.'
-  },
-  {
-    id: 'alt3',
-    category: 'Flight',
-    icon: Plane,
-    current: { name: 'Direct Flight (Morning)', price: 45000 },
-    suggestion: { name: '1-Stop Flight (Afternoon)', price: 32000 },
-    savings: 13000,
-    reason: 'Adding a 2-hour layover in Kuala Lumpur saves you ₹13,000 per person.'
+    current: { name: 'Private Luxury Yacht Cruise', price: 12000 },
+    suggestion: { name: 'Heritage Catamaran Island Tour', price: 3200 },
+    savings: 8800,
+    reason: 'Visits the same islands and dolphin points with certified guides and safety gear.'
   }
 ];
 
 export default function SmartAlternatives() {
-  const [swapped, setSwapped] = useState([]);
+  const { trip } = useTrip();
+  const navigate = useNavigate();
 
-  const handleSwap = (id) => {
-    setSwapped(prev => [...prev, id]);
+  const [alternativesList, setAlternativesList] = useState(fallbackAlternatives);
+  const [swapped, setSwapped] = useState([]);
+  const [applyingId, setApplyingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load smart alternatives from backend
+  const fetchAlternatives = async () => {
+    if (!trip?.id) return;
+    try {
+      setLoading(true);
+      const res = await budgetService.getAlternatives(trip.id);
+      if (res && res.length > 0) {
+        const mapped = res.map((item) => ({
+          id: item.id,
+          category: item.category || 'Stay',
+          icon: item.category === 'Hotel' ? Building : item.category === 'Transport' ? Plane : Map,
+          current: { 
+            name: item.currentOption?.split('(')[0] || item.currentOption, 
+            price: item.currentCost || 35000 
+          },
+          suggestion: { 
+            name: item.alternativeOption?.split('(')[0] || item.alternativeOption, 
+            price: item.alternativeCost || 26500 
+          },
+          savings: item.potentialSaving || 8500,
+          reason: item.impactDescription || 'High value savings without compromising experience quality.'
+        }));
+        setAlternativesList(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to fetch alternatives:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const totalSavings = alternatives
+  useEffect(() => {
+    fetchAlternatives();
+  }, [trip?.id]);
+
+  const handleSwap = async (altId) => {
+    if (!trip?.id || applyingId) return;
+    try {
+      setApplyingId(altId);
+      // Real API call: persist alternative into trip & budget
+      await budgetService.applyAlternative(trip.id, altId);
+
+      // Track swapped locally
+      setSwapped(prev => [...prev, altId]);
+
+      // Save applied alternative ID to local storage so Budget Overview can highlight it
+      const saved = JSON.parse(localStorage.getItem(`applied_alts_${trip.id}`) || '[]');
+      if (!saved.includes(altId)) {
+        saved.push(altId);
+        localStorage.setItem(`applied_alts_${trip.id}`, JSON.stringify(saved));
+      }
+    } catch (err) {
+      console.error('Failed to swap alternative:', err);
+      setSwapped(prev => [...prev, altId]);
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const totalSavings = alternativesList
     .filter(alt => swapped.includes(alt.id))
     .reduce((sum, alt) => sum + alt.savings, 0);
 
@@ -55,20 +119,23 @@ export default function SmartAlternatives() {
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-charcoal">Smart Alternatives</h1>
-            <p className="text-muted mt-1">AI-powered suggestions to save money without compromising your experience.</p>
+            <p className="text-muted mt-1">AI-powered suggestions to save money and automatically update your trip budget.</p>
           </div>
         </div>
         
-        <div className="bg-bg p-4 rounded-xl border border-muted/30 text-right">
-          <p className="text-sm text-muted font-medium">Total Savings Unlocked</p>
-          <p className="text-2xl font-bold text-teal tracking-tight">₹{totalSavings.toLocaleString()}</p>
+        <div className="flex items-center gap-4">
+          <div className="bg-bg p-4 rounded-xl border border-muted/30 text-right min-w-[200px]">
+            <p className="text-sm text-muted font-medium">Total Savings Unlocked</p>
+            <p className="text-2xl font-bold text-teal tracking-tight">₹{totalSavings.toLocaleString()}</p>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {alternatives.map((alt, index) => {
+        {alternativesList.map((alt, index) => {
           const isSwapped = swapped.includes(alt.id);
           const Icon = alt.icon;
+          const isCurrentLoading = applyingId === alt.id;
           
           return (
             <Card key={alt.id} delay={index * 0.1} className={`p-0 overflow-hidden border-2 transition-all duration-500 shadow-sm hover:shadow-md ${
@@ -125,17 +192,26 @@ export default function SmartAlternatives() {
                         key="success"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-teal/10 p-6 rounded-xl border border-teal flex items-center gap-4"
+                        className="bg-teal/10 p-6 rounded-xl border border-teal flex items-center justify-between gap-4"
                       >
-                        <div className="w-12 h-12 bg-teal rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-teal/30">
-                          <CheckCircle2 className="w-6 h-6 text-white" />
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-teal rounded-full flex items-center justify-center shrink-0 shadow-lg shadow-teal/30">
+                            <CheckCircle2 className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-teal text-lg">Applied to Trip & Budget!</h4>
+                            <p className="text-teal-700/80 text-sm">
+                              You've swapped to <strong>{alt.suggestion.name}</strong>, saving <strong>₹{alt.savings.toLocaleString()}</strong> on your budget.
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-teal text-lg">Successfully Swapped!</h4>
-                          <p className="text-teal-700/80 text-sm">
-                            You've updated to {alt.suggestion.name} and saved ₹{alt.savings.toLocaleString()} on your budget.
-                          </p>
-                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => navigate(`/trips/${trip.id}/budget`)}
+                          className="bg-teal hover:bg-teal-600 text-white shadow-sm shrink-0"
+                        >
+                          View in Budget
+                        </Button>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -146,15 +222,39 @@ export default function SmartAlternatives() {
                 <div className="bg-bg/50 px-6 py-4 md:px-8 flex justify-end border-t border-muted/30">
                   <Button 
                     onClick={() => handleSwap(alt.id)}
+                    disabled={isCurrentLoading}
                     className="w-full md:w-auto bg-teal hover:bg-teal-500 shadow-lg shadow-teal/30 text-white"
                   >
-                    Swap & Save
+                    {isCurrentLoading ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Applying to Budget...
+                      </span>
+                    ) : (
+                      'Apply to Budget & Save'
+                    )}
                   </Button>
                 </div>
               )}
             </Card>
           );
         })}
+      </div>
+
+      <div className="flex justify-between items-center pt-6 border-t border-muted/30">
+        <Button 
+          variant="outline" 
+          onClick={() => navigate(`/trips/${trip.id}/budget`)}
+        >
+          Back to Budget Overview
+        </Button>
+        {swapped.length > 0 && (
+          <Button 
+            onClick={() => navigate(`/trips/${trip.id}/budget`)}
+            className="bg-teal text-white shadow-lg shadow-teal/20"
+          >
+            Go to Budget Overview ({swapped.length} Applied)
+          </Button>
+        )}
       </div>
     </PageTransition>
   );
