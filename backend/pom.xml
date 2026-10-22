@@ -18,7 +18,7 @@
     <description>WanderPlan Travel and Budget Planner Backend API</description>
 
     <properties>
-        <java.version>25</java.version>
+        <java.version>17</java.version>
         <jwt.version>0.12.6</jwt.version>
     </properties>
 
@@ -104,8 +104,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>25</source>
-                    <target>25</target>
+                    <source>17</source>
+                    <target>17</target>
                 </configuration>
             </plugin>
         </plugins>
