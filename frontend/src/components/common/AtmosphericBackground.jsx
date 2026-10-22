@@ -22,9 +22,20 @@ const PARTICLES = [
 
 export default function AtmosphericBackground({ variant = 'default' }) {
   const prefersReducedMotion = useReducedMotion();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || window.matchMedia("(pointer: coarse)").matches);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const { scrollY } = useScroll();
 
-  // Gentle scroll parallax using springs for smoothness
+  // Gentle scroll parallax using springs for smoothness (only active on desktop)
   const springConfig = { stiffness: 100, damping: 30, restDelta: 0.001 };
   const ySlow = useSpring(useTransform(scrollY, [0, 1000], [0, 50]), springConfig);
   const yMedium = useSpring(useTransform(scrollY, [0, 1000], [0, 80]), springConfig);
@@ -52,10 +63,12 @@ export default function AtmosphericBackground({ variant = 'default' }) {
   const showTopo = ['destination', 'itinerary', 'default'].includes(variant);
   const showSun = ['destination', 'budget', 'default'].includes(variant);
   
-  if (variant === 'minimal' || variant === 'safety') {
+  if (variant === 'minimal' || variant === 'safety' || isMobile) {
     return (
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 bg-[#EEF8FC] opacity-70" />
+        <div className="absolute inset-0 bg-[#EEF8FC]" />
+        {/* Subtle static gradient for mobile - zero CPU overhead */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#14B8A6]/5 via-transparent to-[#FF6B4A]/5" />
       </div>
     );
   }

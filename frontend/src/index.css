@@ -40,11 +40,19 @@
     font-family: 'Inter', sans-serif;
     @apply antialiased;
     color: var(--color-charcoal);
-    background: linear-gradient(-45deg, #EEF8FC, #89C8E2, #14B8A6, #0F766E);
-    background-size: 400% 400%;
-    animation: gradientBG 15s ease infinite;
+    background: #EEF8FC;
+    background: linear-gradient(135deg, #EEF8FC 0%, #D8EEF5 50%, #BFE8F2 100%);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  @media (min-width: 1024px) {
+    body {
+      background: linear-gradient(-45deg, #EEF8FC, #C5E5EE, #E0F4F7, #EEF8FC);
+      background-size: 300% 300%;
+      animation: gradientBG 20s ease infinite;
+    }
   }
 
   @keyframes gradientBG {
