@@ -9,6 +9,7 @@ import { invitationService } from '../../services/invitationService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { Compass, Mail } from 'lucide-react';
+import { TRAVEL_MOODS } from '../../constants/travelMoods';
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,6 +22,15 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get('inviteToken');
   const invitedEmail = searchParams.get('email');
+  const tripSetupParams = new URLSearchParams();
+  const setupDestination = searchParams.get('destination')?.trim();
+  if (setupDestination) {
+    tripSetupParams.set('destination', setupDestination);
+    searchParams.getAll('interest')
+      .filter(interest => TRAVEL_MOODS.some(mood => mood.id === interest))
+      .forEach(interest => tripSetupParams.append('interest', interest));
+  }
+  const tripSetupSearch = tripSetupParams.toString() ? `?${tripSetupParams.toString()}` : '';
   
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
@@ -57,7 +67,7 @@ export default function LoginPage() {
           setTimeout(() => navigate('/trips'), 3000);
         }
       } else {
-        navigate('/dashboard');
+        navigate(tripSetupSearch ? `/trips/new${tripSetupSearch}` : '/dashboard');
       }
     } catch (err) {
       setErrorMsg('Invalid email or password');
@@ -100,7 +110,7 @@ export default function LoginPage() {
         <p className="mt-2 text-center text-sm text-secondary">
           Don't have an account?{' '}
           <Link 
-            to={inviteToken ? `/signup?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : '/signup'} 
+            to={inviteToken ? `/signup?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : `/signup${tripSetupSearch}`}
             className="font-medium text-teal hover:text-teal-600"
           >
             Sign up

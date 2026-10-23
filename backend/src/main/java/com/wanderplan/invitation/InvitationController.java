@@ -17,13 +17,33 @@ public class InvitationController {
     @Autowired
     private InvitationService invitationService;
 
+    @PostMapping("/trips/{tripId}/invitations/link")
+    public ResponseEntity<ApiResponse<InvitationResponse>> createShareInvitation(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        InvitationResponse response = invitationService.createShareInvitation(tripId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Shareable invitation link is ready", response));
+    }
+
+    @PostMapping("/trips/{tripId}/invitations/{invitationId}/link")
+    public ResponseEntity<ApiResponse<InvitationResponse>> refreshShareInvitation(
+            @PathVariable Long tripId,
+            @PathVariable Long invitationId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        InvitationResponse response = invitationService.refreshShareInvitation(tripId, invitationId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("New shareable invitation link is ready", response));
+    }
+
     @PostMapping("/trips/{tripId}/invitations")
     public ResponseEntity<ApiResponse<InvitationResponse>> sendInvitation(
             @PathVariable Long tripId,
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @Valid @RequestBody SendInvitationRequest request) {
         InvitationResponse response = invitationService.sendInvitation(tripId, userPrincipal.getId(), request);
-        return ResponseEntity.ok(ApiResponse.success("Invitation sent successfully", response));
+            String message = Boolean.TRUE.equals(response.getEmailSent())
+                    ? "Invitation email sent successfully"
+                    : "Invitation created, but email delivery failed. Share the invitation link manually.";
+            return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 
     @GetMapping("/trips/{tripId}/invitations")
@@ -49,7 +69,10 @@ public class InvitationController {
             @PathVariable Long invitationId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         InvitationResponse response = invitationService.resendInvitation(tripId, invitationId, userPrincipal.getId());
-        return ResponseEntity.ok(ApiResponse.success("Invitation resent successfully", response));
+        String message = Boolean.TRUE.equals(response.getEmailSent())
+                ? "Invitation email resent successfully"
+                : "Invitation recreated, but email delivery failed. Share the invitation link manually.";
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 
     @GetMapping("/invitations/verify")

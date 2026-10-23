@@ -2,6 +2,8 @@ package com.wanderplan.place;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wanderplan.exception.BadRequestException;
+import com.wanderplan.exception.ExternalServiceUnavailableException;
 import com.wanderplan.preference.Preference;
 import com.wanderplan.preference.PreferenceRepository;
 import com.wanderplan.trip.Trip;
@@ -49,6 +51,7 @@ public class PlaceService {
     // In-memory thread-safe cache for images and coordinates to guarantee ultra-fast sub-second responses
     private static final Map<String, String> IMAGE_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, double[]> GEO_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Long> OSM_AREA_CACHE = new ConcurrentHashMap<>();
 
     // Verified real photos of prominent Indian & global travel landmarks
     private static final Map<String, String> FAMOUS_LANDMARK_IMAGES = Map.ofEntries(
@@ -191,91 +194,77 @@ public class PlaceService {
     public List<PlaceResponse> getPlacesForTrip(Long tripId, Long userId, String location, int radius) {
         tripService.validateTripMembership(tripId, userId);
 
-        Trip trip = tripRepository.findById(tripId).orElse(null);
-        String destination = trip != null && trip.getDestination() != null && !trip.getDestination().isBlank() 
-                ? trip.getDestination().trim() 
-                : "Goa";
-        
-        List<String> interests = new ArrayList<>();
-        if (trip != null) {
-            List<Preference> prefs = preferenceRepository.findByTripId(trip.getId());
-            interests = prefs.stream().map(Preference::getName).collect(Collectors.toList());
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new com.wanderplan.exception.ResourceNotFoundException("Trip not found"));
+        String destination = trip.getDestination().trim();
+        if (radius < 1 || radius > 35) {
+            throw new BadRequestException("Search radius must be between 1 and 35 km");
         }
+        if (location != null && location.trim().length() > 120) {
+            throw new BadRequestException("Search area must be 120 characters or fewer");
+        }
+
+        List<String> interests = preferenceRepository.findByTripId(trip.getId()).stream()
+                .map(Preference::getName)
+                .collect(Collectors.toList());
 
         String searchArea = (location != null && !location.trim().isEmpty()) ? location.trim() : destination;
-        int effectiveRadiusKm = (radius > 0) ? radius : 10;
-
-        // Resolve exact area center coordinates
-        double[] coords = resolveCoordinates(searchArea, destination);
-        double centerLat = coords != null ? coords[0] : 15.5439; // default to Calangute/Goa center
-        double centerLon = coords != null ? coords[1] : 73.7553;
+        boolean destinationWideSearch = location == null || location.trim().isEmpty();
+        int effectiveRadiusKm = radius;
+        Long destinationAreaId = destinationWideSearch ? resolveOsmAreaId(searchArea) : null;
+        if (destinationWideSearch && destinationAreaId == null) {
+            throw new BadRequestException("Could not find a map boundary for the trip destination. Search for a city or locality instead.");
+        }
+        double[] coords = destinationWideSearch ? null : resolveCoordinates(searchArea, destination);
+        if (!destinationWideSearch && coords == null) {
+            throw new BadRequestException("Could not locate that area. Add the city or state and try again.");
+        }
+        double centerLat = destinationWideSearch ? 0 : coords[0];
+        double centerLon = destinationWideSearch ? 0 : coords[1];
 
         List<PlaceResponse> places = new ArrayList<>();
-
-        // 1. Gather all verified real landmarks strictly within the user-specified distance
-        List<PlaceResponse> verifiedInRadius = findNearbyVerifiedLandmarks(centerLat, centerLon, effectiveRadiusKm, searchArea, destination, interests, trip);
-        places.addAll(verifiedInRadius);
-
-        // If user searched a very tight radius (e.g. 2-3km) and got few places, also expand slightly to closest verified landmarks
-        if (places.size() < 4) {
-            int expandedRadius = Math.max(effectiveRadiusKm * 2, 10);
-            List<PlaceResponse> expandedPlaces = findNearbyVerifiedLandmarks(centerLat, centerLon, expandedRadius, searchArea, destination, interests, trip);
-            for (PlaceResponse ep : expandedPlaces) {
-                if (places.stream().noneMatch(p -> p.getName().equalsIgnoreCase(ep.getName()))) {
-                    places.add(ep);
-                }
-            }
-        }
-
-        // 2. Fetch live OpenStreetMap Overpass places if external API not available
+        boolean providerResponded = false;
         try {
-            List<PlaceResponse> osmPlaces = fetchOsmPlaces(searchArea, destination, centerLat, centerLon, effectiveRadiusKm, interests, trip);
-            for (PlaceResponse op : osmPlaces) {
-                if (places.stream().noneMatch(p -> p.getName().equalsIgnoreCase(op.getName()))) {
-                    places.add(op);
-                }
-            }
+            List<PlaceResponse> osmPlaces = fetchOsmPlaces(searchArea, centerLat, centerLon, effectiveRadiusKm, destinationAreaId, interests);
+            places.addAll(osmPlaces);
+            providerResponded = true;
         } catch (Exception e) {
-            log.warn("OSM query skipped or timed out: {}", e.getMessage());
+            log.warn("OSM places search failed for {}: {}", searchArea, e.getMessage());
         }
 
-        // 3. Fallback to Nominatim live search if needed
-        if (places.size() < 6) {
+        if (places.isEmpty() && !destinationWideSearch) {
             try {
-                fetchNominatimPlaces(places, searchArea, destination, centerLat, centerLon, effectiveRadiusKm);
+                providerResponded |= fetchNominatimPlaces(places, searchArea, destination, centerLat, centerLon, effectiveRadiusKm);
             } catch (Exception e) {
-                log.warn("Nominatim search skipped: {}", e.getMessage());
+                log.warn("Nominatim places search failed for {}: {}", searchArea, e.getMessage());
             }
         }
+        if (!providerResponded) {
+            throw new ExternalServiceUnavailableException("Map listings are temporarily unavailable. Please try again shortly.");
+        }
 
-        // 4. Sort by distance ascending so closest places appear first, while respecting mood relevance
-        places.sort((a, b) -> {
-            Double distA = a.getDistanceKm() != null ? a.getDistanceKm() : 999.0;
-            Double distB = b.getDistanceKm() != null ? b.getDistanceKm() : 999.0;
-            return Double.compare(distA, distB);
-        });
-
-        return prioritizePlaces(places, interests, trip);
+        // Radius applies to explicit locality searches; destination-wide results are already boundary-limited.
+        if (!destinationWideSearch) {
+            places.removeIf(place -> place.getDistanceKm() == null || place.getDistanceKm() > effectiveRadiusKm);
+        }
+        return prioritizePlaces(places, interests, destinationWideSearch ? 250 : 25, destinationWideSearch);
     }
 
-    private List<PlaceResponse> fetchOsmPlaces(String searchArea, String destination, double lat, double lon, int radiusKm, List<String> interests, Trip trip) {
+    private List<PlaceResponse> fetchOsmPlaces(String searchArea, double lat, double lon, int radiusKm, Long destinationAreaId, List<String> interests) {
         List<PlaceResponse> places = new ArrayList<>();
         int radiusMeters = radiusKm * 1000;
 
         try {
-            String overpassQuery = String.format(
-                    "[out:json][timeout:5];" +
-                    "(" +
-                    "  node[\"tourism\"~\"attraction|viewpoint|museum|gallery|theme_park|zoo|aquarium\"](around:%d,%f,%f);" +
-                    "  node[\"natural\"~\"beach|peak|waterfall|cliff|bay\"](around:%d,%f,%f);" +
-                    "  node[\"historic\"~\"fort|monument|castle|memorial|ruins|heritage\"](around:%d,%f,%f);" +
-                    "  node[\"leisure\"~\"park|nature_reserve|water_park|garden\"](around:%d,%f,%f);" +
-                    ");" +
-                    "out center 30;", 
-                    radiusMeters, lat, lon,
-                    radiusMeters, lat, lon,
-                    radiusMeters, lat, lon,
-                    radiusMeters, lat, lon);
+            String searchBoundary = destinationAreaId != null
+                    ? "(area:" + destinationAreaId + ")"
+                    : "(around:" + radiusMeters + "," + lat + "," + lon + ")";
+            String outputLimit = destinationAreaId != null ? "250" : "60";
+            List<String> selectors = buildMoodSelectors(interests);
+            StringBuilder query = new StringBuilder("[out:json][timeout:12];(");
+            for (String selector : selectors) {
+                query.append("nwr[\"name\"][").append(selector).append("]").append(searchBoundary).append(";");
+            }
+            String overpassQuery = query.append(");out center ").append(outputLimit).append(";").toString();
 
             String overpassUrl = "https://overpass-api.de/api/interpreter";
             HttpHeaders overpassHeaders = new HttpHeaders();
@@ -285,53 +274,109 @@ public class PlaceService {
             HttpEntity<String> overpassEntity = new HttpEntity<>("data=" + URLEncoder.encode(overpassQuery, StandardCharsets.UTF_8), overpassHeaders);
             String overpassJson = restTemplate.postForObject(overpassUrl, overpassEntity, String.class);
 
-            if (overpassJson != null && !overpassJson.isBlank()) {
-                JsonNode overpassRoot = objectMapper.readTree(overpassJson);
-                JsonNode elements = overpassRoot.path("elements");
-                if (elements.isArray()) {
-                    for (JsonNode elem : elements) {
-                        if (places.size() >= 25) break;
-                        JsonNode tags = elem.path("tags");
-                        String name = tags.path("name:en").asText(tags.path("name").asText(""));
-                        if (name.isBlank() || name.length() < 3) continue;
+            if (overpassJson == null || overpassJson.isBlank()) {
+                throw new IllegalStateException("Overpass returned an empty response");
+            }
+            JsonNode overpassRoot = objectMapper.readTree(overpassJson);
+            JsonNode elements = overpassRoot.path("elements");
+            if (!elements.isArray()) {
+                throw new IllegalStateException("Overpass returned an invalid places response");
+            }
+            for (JsonNode elem : elements) {
+                JsonNode tags = elem.path("tags");
+                String name = tags.path("name:en").asText(tags.path("name").asText(""));
+                if (name.isBlank() || name.length() < 3) continue;
 
-                        boolean exists = places.stream().anyMatch(p -> p.getName().equalsIgnoreCase(name));
-                        if (exists) continue;
+                boolean exists = places.stream().anyMatch(p -> p.getName().equalsIgnoreCase(name));
+                if (exists) continue;
 
-                        double placeLat = elem.path("lat").asDouble(elem.path("center").path("lat").asDouble(lat));
-                        double placeLon = elem.path("lon").asDouble(elem.path("center").path("lon").asDouble(lon));
+                double placeLat = elem.path("lat").asDouble(elem.path("center").path("lat").asDouble(Double.NaN));
+                double placeLon = elem.path("lon").asDouble(elem.path("center").path("lon").asDouble(Double.NaN));
+                if (!Double.isFinite(placeLat) || !Double.isFinite(placeLon)
+                        || placeLat < -90 || placeLat > 90 || placeLon < -180 || placeLon > 180) continue;
 
-                        double dist = haversineKm(lat, lon, placeLat, placeLon);
+                Double dist = destinationAreaId == null ? haversineKm(lat, lon, placeLat, placeLon) : null;
+                if (dist != null && dist > radiusKm) continue;
 
-                        String category = deriveCategory(tags);
-                        List<String> tagList = extractTags(tags);
-                        String matchedMood = determineMatchedMood(tags, name, category, interests);
-                        String imgUrl = resolvePlaceImage(tags, name, category, matchedMood, searchArea);
+                String category = deriveCategory(tags);
+                List<String> tagList = extractTags(tags);
+                String imgUrl = resolvePlaceImage(tags, name, category, null, searchArea);
 
-                        places.add(PlaceResponse.builder()
-                                .id("osm-" + elem.path("id").asText())
-                                .name(name)
-                                .category(category)
-                                .rating(tags.has("stars") ? tags.path("stars").asDouble() : (4.2 + (Math.abs(name.hashCode() % 8) / 10.0)))
-                                .location(String.format("%s (%.1f km away)", searchArea, dist))
-                                .distanceKm(dist)
-                                .estimatedCost(deriveCost(trip != null ? trip.getTravelStyle() : "Moderate", category))
-                                .duration(tags.has("opening_hours") ? "Open daily" : "1.5 - 2.5 hrs")
-                                .description(deriveDescription(name, category, searchArea))
-                                .imageUrl(imgUrl)
-                                .latitude(placeLat)
-                                .longitude(placeLon)
-                                .matchedMood(matchedMood)
-                                .tags(tagList)
-                                .build());
-                    }
-                }
+                places.add(PlaceResponse.builder()
+                        .id("osm-" + elem.path("id").asText())
+                        .name(name)
+                        .category(category)
+                        .rating(parseRating(tags))
+                        .location(destinationAreaId == null
+                                ? String.format("%s (%.1f km away)", searchArea, dist)
+                                : formatPlaceLocation(tags, searchArea))
+                        .distanceKm(dist)
+                        .estimatedCost(null)
+                        .duration(null)
+                        .description(tags.path("description").asText(null))
+                        .imageUrl(imgUrl)
+                        .latitude(placeLat)
+                        .longitude(placeLon)
+                        .matchedMood(null)
+                        .tags(tagList)
+                        .build());
             }
         } catch (Exception e) {
-            log.warn("Overpass API query timed out: {}", e.getMessage());
+            throw new ExternalServiceUnavailableException("OpenStreetMap places lookup failed.", e);
         }
 
         return places;
+    }
+
+    private List<String> buildMoodSelectors(List<String> interests) {
+        LinkedHashSet<String> selectors = new LinkedHashSet<>();
+        if (interests != null) {
+            for (String interest : interests) {
+                String mood = interest.toLowerCase(Locale.ROOT);
+                if (mood.contains("beach")) {
+                    selectors.add("\"natural\"~\"beach|bay\"");
+                    selectors.add("\"leisure\"=\"beach_resort\"");
+                }
+                if (mood.contains("nature")) {
+                    selectors.add("\"natural\"~\"peak|waterfall|cliff|wood|cave|spring|water|wetland\"");
+                    selectors.add("\"leisure\"~\"park|nature_reserve|garden\"");
+                }
+                if (mood.contains("adventure")) {
+                    selectors.add("\"sport\"~\"climbing|surfing|hiking|horse_riding|diving|canoe|kayak\"");
+                    selectors.add("\"natural\"~\"waterfall|peak|cliff|cave\"");
+                }
+                if (mood.contains("food") || mood.contains("culture")) {
+                    selectors.add("\"amenity\"~\"restaurant|cafe|food_court|marketplace|arts_centre|place_of_worship\"");
+                    selectors.add("\"shop\"~\"mall|market|department_store\"");
+                    selectors.add("\"tourism\"~\"museum|gallery|artwork\"");
+                }
+                if (mood.contains("nightlife")) {
+                    selectors.add("\"amenity\"~\"bar|pub|nightclub|casino|theatre\"");
+                }
+                if (mood.contains("history") || mood.contains("heritage")) {
+                    selectors.add("\"historic\"");
+                    selectors.add("\"tourism\"~\"museum|attraction\"");
+                }
+                if (mood.contains("family")) {
+                    selectors.add("\"tourism\"~\"zoo|theme_park|aquarium\"");
+                    selectors.add("\"leisure\"~\"playground|water_park\"");
+                }
+                if (mood.contains("romantic")) {
+                    selectors.add("\"tourism\"=\"viewpoint\"");
+                    selectors.add("\"natural\"~\"beach|bay|waterfall\"");
+                    selectors.add("\"leisure\"~\"garden|park\"");
+                }
+            }
+        }
+
+        selectors.add("\"tourism\"~\"attraction|viewpoint|museum|gallery|theme_park|zoo|aquarium|artwork|camp_site|resort\"");
+        selectors.add("\"natural\"~\"beach|peak|waterfall|cliff|bay|wood|cave|spring|water|wetland\"");
+        selectors.add("\"historic\"");
+        selectors.add("\"leisure\"~\"park|nature_reserve|water_park|garden|playground|beach_resort|marina\"");
+        selectors.add("\"amenity\"~\"restaurant|cafe|food_court|marketplace|bar|pub|nightclub|casino|theatre|arts_centre|place_of_worship\"");
+        selectors.add("\"shop\"~\"mall|market|department_store\"");
+        selectors.add("\"sport\"~\"climbing|surfing|hiking|horse_riding|diving|canoe|kayak\"");
+        return new ArrayList<>(selectors);
     }
 
     private double[] resolveCoordinates(String searchArea, String destination) {
@@ -359,17 +404,56 @@ public class PlaceService {
         if (coords == null) {
             coords = geocodeLocation(searchArea);
         }
-        if (coords == null && !searchArea.equalsIgnoreCase(destination)) {
-            coords = geocodeLocation(destination);
-        }
-
         if (coords != null) {
             GEO_CACHE.put(cacheKey, coords);
         }
         return coords;
     }
 
-    private void fetchNominatimPlaces(List<PlaceResponse> places, String searchArea, String destination, double centerLat, double centerLon, int radiusKm) {
+    private Long resolveOsmAreaId(String destination) {
+        String cacheKey = destination.toLowerCase(Locale.ROOT).trim();
+        Long cached = OSM_AREA_CACHE.get(cacheKey);
+        if (cached != null) return cached;
+
+        try {
+            String url = "https://nominatim.openstreetmap.org/search?q="
+                    + URLEncoder.encode(destination, StandardCharsets.UTF_8)
+                    + "&format=jsonv2&limit=1&addressdetails=1";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "WanderPlan-Travel-App/1.0 (contact@wanderplan.com)");
+            String response = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class).getBody();
+            JsonNode results = objectMapper.readTree(response);
+            if (!results.isArray() || results.isEmpty()) return null;
+
+            JsonNode result = results.get(0);
+            String osmType = result.path("osm_type").asText("").toLowerCase(Locale.ROOT);
+            long osmId = result.path("osm_id").asLong(0);
+            long areaId;
+            if (osmType.equals("relation")) {
+                areaId = osmId + 3_600_000_000L;
+            } else if (osmType.equals("way")) {
+                areaId = osmId + 2_400_000_000L;
+            } else {
+                return null;
+            }
+            OSM_AREA_CACHE.put(cacheKey, areaId);
+            return areaId;
+        } catch (Exception e) {
+            log.warn("Could not resolve OpenStreetMap boundary for destination {}: {}", destination, e.getMessage());
+            return null;
+        }
+    }
+
+    private String formatPlaceLocation(JsonNode tags, String fallback) {
+        for (String key : List.of("addr:city", "addr:place", "addr:suburb", "addr:county", "addr:state")) {
+            String value = tags.path(key).asText("").trim();
+            if (!value.isBlank()) return value;
+        }
+        return fallback;
+    }
+
+    private boolean fetchNominatimPlaces(List<PlaceResponse> places, String searchArea, String destination, double centerLat, double centerLon, int radiusKm) {
+        boolean providerResponded = false;
         String[] queries = new String[]{
             "attractions in " + searchArea + " " + destination,
             searchArea + " attractions"
@@ -384,17 +468,20 @@ public class PlaceService {
                 String geoJson = restTemplate.exchange(nomUrl, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class).getBody();
                 JsonNode root = objectMapper.readTree(geoJson);
                 if (root.isArray()) {
+                    providerResponded = true;
                     for (JsonNode item : root) {
                         String name = item.path("name").asText(item.path("display_name").asText("").split(",")[0]);
                         if (name.isBlank() || name.length() > 60) continue;
                         boolean exists = places.stream().anyMatch(p -> p.getName().equalsIgnoreCase(name));
                         if (exists) continue;
 
-                        double placeLat = item.path("lat").asDouble(0.0);
-                        double placeLon = item.path("lon").asDouble(0.0);
+                        double placeLat = item.path("lat").asDouble(Double.NaN);
+                        double placeLon = item.path("lon").asDouble(Double.NaN);
+                        if (!Double.isFinite(placeLat) || !Double.isFinite(placeLon)
+                                || placeLat < -90 || placeLat > 90 || placeLon < -180 || placeLon > 180) continue;
                         double dist = haversineKm(centerLat, centerLon, placeLat, placeLon);
 
-                        if (dist > radiusKm * 1.5) continue; // Skip places too far away
+                        if (dist > radiusKm) continue;
 
                         String type = item.path("type").asText("tourism");
                         String category = type.contains("museum") ? "Museums & Art" : (type.contains("park") ? "Parks & Nature" : "Sightseeing & Culture");
@@ -403,12 +490,12 @@ public class PlaceService {
                                 .id("nom-" + item.path("place_id").asText())
                                 .name(name)
                                 .category(category)
-                                .rating(4.2 + (Math.abs(name.hashCode() % 8) / 10.0))
-                                .location(String.format("%s (%.1f km away)", searchArea, dist))
+                                .rating(null)
+                                .location(String.format("%s (%.1f km away)", item.path("display_name").asText(searchArea), dist))
                                 .distanceKm(dist)
-                                .estimatedCost(0.0)
-                                .duration("1 - 2 hrs")
-                                .description("Scenic tourist landmark in " + searchArea)
+                                .estimatedCost(null)
+                                .duration(null)
+                                .description(item.path("display_name").asText(null))
                                 .imageUrl(resolvePlaceImage(null, name, category, null, searchArea))
                                 .latitude(placeLat)
                                 .longitude(placeLon)
@@ -416,7 +503,22 @@ public class PlaceService {
                                 .build());
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warn("Nominatim places lookup failed for query {}: {}", q, e.getMessage());
+            }
+            if (!places.isEmpty()) break;
+        }
+        return providerResponded;
+    }
+
+    private Double parseRating(JsonNode tags) {
+        String value = tags.path("stars").asText("");
+        if (value.isBlank()) return null;
+        try {
+            double rating = Double.parseDouble(value);
+            return rating >= 0 && rating <= 5 ? rating : null;
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 
@@ -479,83 +581,89 @@ public class PlaceService {
         return places;
     }
 
-    private List<PlaceResponse> prioritizePlaces(List<PlaceResponse> places, List<String> interests, Trip trip) {
+    private List<PlaceResponse> prioritizePlaces(List<PlaceResponse> places, List<String> interests, int maxResults, boolean preferOnlyMoodMatches) {
         if (places == null || places.isEmpty()) return places;
 
-        List<String> normalizedInterests = (interests != null ? interests : Collections.<String>emptyList())
-                .stream().map(String::toLowerCase).collect(Collectors.toList());
+        List<String> selectedInterests = interests != null ? interests : Collections.emptyList();
 
         for (PlaceResponse place : places) {
             int score = 0;
-            String matched = place.getMatchedMood();
+            String matched = null;
+            List<String> matchedInterests = new ArrayList<>();
 
-            String cat = (place.getCategory() != null ? place.getCategory().toLowerCase() : "");
-            String desc = (place.getDescription() != null ? place.getDescription().toLowerCase() : "");
-            String name = (place.getName() != null ? place.getName().toLowerCase() : "");
-
-            for (String interest : normalizedInterests) {
-                if (interest.contains("beach") && (cat.contains("beach") || desc.contains("beach") || name.contains("beach") || name.contains("coast"))) {
+            for (String interest : selectedInterests) {
+                if (matchesInterest(place, interest)) {
                     score += 20;
-                    if (matched == null) matched = "Beach & Relax";
-                } else if (interest.contains("adventure") && (cat.contains("adventure") || cat.contains("nature") || desc.contains("waterfall") || desc.contains("cliff") || desc.contains("trek"))) {
-                    score += 20;
-                    if (matched == null) matched = "Adventure";
-                } else if (interest.contains("nature") && (cat.contains("nature") || cat.contains("park") || desc.contains("garden") || desc.contains("reserve"))) {
-                    score += 20;
-                    if (matched == null) matched = "Nature";
-                } else if (interest.contains("history") && (cat.contains("history") || cat.contains("heritage") || desc.contains("monument") || desc.contains("fort") || desc.contains("ruin") || desc.contains("temple"))) {
-                    score += 20;
-                    if (matched == null) matched = "History";
-                } else if (interest.contains("food") && (cat.contains("food") || cat.contains("market") || desc.contains("market") || desc.contains("bazaar") || desc.contains("cafe"))) {
-                    score += 20;
-                    if (matched == null) matched = "Food & Culture";
-                } else if (interest.contains("nightlife") && (cat.contains("nightlife") || desc.contains("club") || desc.contains("lounge"))) {
-                    score += 20;
-                    if (matched == null) matched = "Nightlife";
-                } else if (interest.contains("family") && (cat.contains("entertainment") || cat.contains("park") || desc.contains("zoo") || desc.contains("theme park"))) {
-                    score += 20;
-                    if (matched == null) matched = "Family";
-                } else if (interest.contains("romantic") && (cat.contains("viewpoint") || desc.contains("sunset") || desc.contains("scenic"))) {
-                    score += 20;
-                    if (matched == null) matched = "Romantic";
+                    matchedInterests.add(interest);
+                    if (matched == null) matched = interest;
                 }
             }
 
-            if (matched != null) {
-                place.setMatchedMood(matched);
+            if (matched == null && place.getMatchedMood() != null) {
+                matched = place.getMatchedMood();
             }
+            place.setMatchedMood(matched);
             place.setMatchScore(score);
+            if (!matchedInterests.isEmpty()) {
+                List<String> tags = place.getTags() == null ? new ArrayList<>() : new ArrayList<>(place.getTags());
+                for (String interest : matchedInterests) {
+                    if (!tags.contains(interest)) tags.add(interest);
+                }
+                place.setTags(tags);
+            }
         }
 
-        // Sort descending: highest match score first, so user's selected moods appear directly on top
-        places.sort((a, b) -> Integer.compare(
-                b.getMatchScore() != null ? b.getMatchScore() : 0,
-                a.getMatchScore() != null ? a.getMatchScore() : 0
-        ));
+        if (preferOnlyMoodMatches && !selectedInterests.isEmpty()) {
+            List<PlaceResponse> moodMatches = places.stream()
+                    .filter(place -> place.getMatchScore() != null && place.getMatchScore() > 0)
+                    .collect(Collectors.toList());
+            if (!moodMatches.isEmpty()) {
+                places = moodMatches;
+            }
+        }
 
-        return places;
+        places.sort(Comparator
+                .comparing((PlaceResponse place) -> place.getMatchScore() == null ? 0 : place.getMatchScore())
+                .reversed()
+                .thenComparing(place -> place.getDistanceKm() == null ? Double.MAX_VALUE : place.getDistanceKm()));
+
+        return places.size() > maxResults ? new ArrayList<>(places.subList(0, maxResults)) : places;
     }
 
-    private String determineMatchedMood(JsonNode tags, String name, String category, List<String> interests) {
-        String lowerName = name.toLowerCase();
-        String lowerCat = category.toLowerCase();
-        
-        if (lowerName.contains("beach") || tags.has("beach") || tags.path("natural").asText("").contains("beach")) return "Beach & Relax";
-        if (lowerCat.contains("history") || tags.has("historic") || lowerName.contains("fort") || lowerName.contains("temple") || lowerName.contains("palace") || lowerName.contains("church")) return "History";
-        if (lowerCat.contains("nature") || tags.has("natural") || lowerName.contains("waterfall") || lowerName.contains("lake") || lowerName.contains("hill") || lowerName.contains("valley")) return "Nature";
-        if (lowerName.contains("adventure") || lowerName.contains("trek") || lowerName.contains("safari")) return "Adventure";
-        if (lowerCat.contains("museum") || tags.path("tourism").asText("").contains("museum")) return "Food & Culture";
-        if (lowerName.contains("park") || lowerCat.contains("entertainment")) return "Family";
-        if (lowerName.contains("sunset") || lowerCat.contains("viewpoint")) return "Romantic";
-        return null;
+    private boolean matchesInterest(PlaceResponse place, String interest) {
+        String mood = interest.toLowerCase(Locale.ROOT);
+        String category = place.getCategory() == null ? "" : place.getCategory().toLowerCase(Locale.ROOT);
+        String name = place.getName() == null ? "" : place.getName().toLowerCase(Locale.ROOT);
+        String description = place.getDescription() == null ? "" : place.getDescription().toLowerCase(Locale.ROOT);
+        String tags = place.getTags() == null ? "" : String.join(" ", place.getTags()).toLowerCase(Locale.ROOT);
+        String text = category + " " + name + " " + description + " " + tags;
+
+        if (mood.contains("beach")) return hasAny(text, "beach", "coast", "seaside", "sea", "shore");
+        if (mood.contains("nature")) return hasAny(text, "nature", "park", "garden", "forest", "wood", "waterfall", "lake", "peak", "cliff", "reserve", "cave", "spring");
+        if (mood.contains("adventure")) return hasAny(text, "adventure", "climbing", "surfing", "hiking", "trek", "horse riding", "diving", "canoe", "kayak", "waterfall", "safari");
+        if (mood.contains("food") || mood.contains("culture")) return hasAny(text, "food", "restaurant", "cafe", "market", "bazaar", "food court", "arts centre", "artwork", "museum", "gallery", "place of worship");
+        if (mood.contains("nightlife")) return hasAny(text, "nightlife", "bar", "pub", "nightclub", "casino", "lounge", "theatre");
+        if (mood.contains("history") || mood.contains("heritage")) return hasAny(text, "historic", "history", "heritage", "fort", "monument", "castle", "memorial", "ruins", "temple", "church", "mosque", "palace", "museum");
+        if (mood.contains("family")) return hasAny(text, "family", "zoo", "theme park", "aquarium", "playground", "amusement");
+        if (mood.contains("romantic")) return hasAny(text, "romantic", "viewpoint", "sunset", "scenic", "beach", "garden", "waterfall");
+        return text.contains(mood);
+    }
+
+    private boolean hasAny(String text, String... terms) {
+        String normalizedText = " " + text.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim() + " ";
+        for (String term : terms) {
+            String normalizedTerm = term.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+            if (normalizedText.contains(" " + normalizedTerm + " ")) return true;
+        }
+        return false;
     }
 
     private List<String> extractTags(JsonNode tags) {
         List<String> list = new ArrayList<>();
-        if (tags.has("historic")) list.add("Historic");
-        if (tags.has("tourism")) list.add(tags.path("tourism").asText());
-        if (tags.has("natural")) list.add(tags.path("natural").asText());
-        if (tags.has("leisure")) list.add(tags.path("leisure").asText());
+        for (String key : List.of("historic", "tourism", "natural", "leisure", "amenity", "shop", "sport")) {
+            String value = tags.path(key).asText("");
+            if (!value.isBlank()) list.add(value.replace('_', ' '));
+        }
         return list;
     }
 
@@ -574,6 +682,15 @@ public class PlaceService {
 
     private String deriveCategory(JsonNode tags) {
         if (tags.has("historic")) return "History & Heritage";
+        String amenity = tags.path("amenity").asText("").toLowerCase(Locale.ROOT);
+        if (Set.of("restaurant", "cafe", "food_court", "marketplace").contains(amenity)
+                || Set.of("mall", "market", "department_store").contains(tags.path("shop").asText("").toLowerCase(Locale.ROOT))) {
+            return "Food & Culture";
+        }
+        if (Set.of("bar", "pub", "nightclub", "casino").contains(amenity)) return "Nightlife";
+        if (Set.of("zoo", "theme_park", "aquarium").contains(tags.path("tourism").asText("").toLowerCase(Locale.ROOT))
+                || "playground".equalsIgnoreCase(tags.path("leisure").asText(""))) return "Family & Entertainment";
+        if (tags.has("sport")) return "Adventure";
         if (tags.has("tourism")) {
             String tour = tags.path("tourism").asText();
             if ("museum".equalsIgnoreCase(tour) || "gallery".equalsIgnoreCase(tour)) return "Museums & Art";
@@ -850,13 +967,7 @@ public class PlaceService {
     }
 
     public String resolvePlaceImage(JsonNode tags, String name, String category, String matchedMood, String searchArea) {
-        if (name == null || name.isBlank()) {
-            return getDiverseCategoryImage(category, matchedMood, searchArea);
-        }
-
-        String lowerName = name.toLowerCase().trim();
-
-        // 1. Direct photo tag or Wikimedia Commons file from OpenStreetMap data
+        // Only show imagery explicitly linked to the mapped place.
         if (tags != null) {
             if (tags.has("image")) {
                 String img = tags.path("image").asText("").trim();
@@ -881,27 +992,7 @@ public class PlaceService {
             }
         }
 
-        // 2. REAL photo from Wikipedia/Wikimedia Commons (FREE - no API key needed)
-        String wikiImg = fetchWikipediaImageFast(name);
-        if (wikiImg != null) {
-            return wikiImg;
-        }
-
-        // 3. Try with search area appended for better accuracy
-        String wikiImgWithArea = fetchWikipediaImageFast(name + " " + searchArea);
-        if (wikiImgWithArea != null) {
-            return wikiImgWithArea;
-        }
-
-        // 4. Fallback to curated landmark photos
-        for (Map.Entry<String, String> entry : FAMOUS_LANDMARK_IMAGES.entrySet()) {
-            if (lowerName.contains(entry.getKey())) {
-                return entry.getValue();
-            }
-        }
-
-        // 5. Return diverse category photo as last resort
-        return getDiverseCategoryImage(category, matchedMood, lowerName + "_" + searchArea);
+        return null;
     }
 
     public String getDiverseCategoryImage(String category, String matchedMood, String seed) {

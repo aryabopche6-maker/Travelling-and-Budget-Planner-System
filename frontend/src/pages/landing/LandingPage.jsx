@@ -1,15 +1,15 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import AtmosphericBackground from '../../components/common/AtmosphericBackground';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Compass, ArrowRight, ArrowUpRight, Wallet, Users, Map,
-  ShieldAlert, Sparkles, Globe, ChevronDown, Star, CheckCircle2
+  ShieldAlert, Sparkles, Globe, ChevronDown, Star, CheckCircle2, CloudSun
 } from 'lucide-react';
-import Button from '../../components/common/Button';
 import MagneticButton from '../../components/animations/MagneticButton';
 import Reveal from '../../components/animations/Reveal';
 import ImageReveal from '../../components/animations/ImageReveal';
+import { TRAVEL_MOODS } from '../../constants/travelMoods';
 
 /* ── Destination data ──────────────────────────────────────────────────── */
 const DESTINATIONS = [
@@ -39,9 +39,9 @@ const FEATURES = [
 ];
 
 /* ── DestinationCard ─────────────────────────────────────────────────── */
-function DestinationCard({ dest, delay = 0 }) {
+function DestinationCard({ dest, delay = 0, className = '' }) {
   return (
-    <Reveal delay={delay}>
+    <Reveal delay={delay} width="100%" className={className}>
       <Link to="/signup" className="block group">
         <div className="relative rounded-2xl overflow-hidden img-zoom-wrap shadow-travel hover:shadow-travel-lg transition-shadow duration-500 cursor-pointer">
           <div className="h-72 md:h-80 bg-bg">
@@ -76,14 +76,62 @@ function DestinationCard({ dest, delay = 0 }) {
   );
 }
 
+function ForecastFeatureCard({ delay = 0 }) {
+  return (
+    <Reveal delay={delay} width="100%">
+      <Link to="/signup" className="block h-full group">
+        <div className="relative flex h-72 md:h-80 flex-col justify-between overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-[#173F49] via-[#285B62] to-[#806276] p-6 text-white shadow-travel transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-travel-lg">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/10 blur-2xl transition-transform duration-700 group-hover:scale-125" />
+          <div className="relative flex items-start justify-between">
+            <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-sm">
+              Plan with confidence
+            </span>
+            <CloudSun className="h-10 w-10 text-amber-200 transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
+          </div>
+          <div className="relative">
+            <h3 className="mb-2 font-display text-2xl font-bold text-white">Weather forecast</h3>
+            <p className="mb-5 max-w-xs text-sm leading-relaxed text-white/75">
+              Check destination weather and rain alerts when planning your trip.
+            </p>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-100 transition-all duration-300 group-hover:gap-3">
+              Start planning <ArrowRight className="h-4 w-4" />
+            </span>
+          </div>
+        </div>
+      </Link>
+    </Reveal>
+  );
+}
+
 /* ── Main Component ──────────────────────────────────────────────────── */
 export default function LandingPage() {
   const heroRef = useRef(null);
   const shouldReduceMotion = useReducedMotion();
+  const navigate = useNavigate();
+  const [discoveryDestination, setDiscoveryDestination] = useState('');
+  const [selectedMoods, setSelectedMoods] = useState([]);
 
   const { scrollY } = useScroll();
   // Parallax: image moves up slowly as user scrolls
   const heroImgY = useTransform(scrollY, [0, 600], shouldReduceMotion ? [0, 0] : [0, 80]);
+
+  const handlePlaceDiscovery = (event) => {
+    event.preventDefault();
+    const destination = discoveryDestination.trim();
+    if (destination.length < 2) return;
+
+    const params = new URLSearchParams({ destination });
+    selectedMoods.forEach(mood => params.append('interest', mood));
+    navigate(`/signup?${params.toString()}`);
+  };
+
+  const toggleMood = (mood) => {
+    setSelectedMoods(current =>
+      current.includes(mood)
+        ? current.filter(selected => selected !== mood)
+        : [...current, mood]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-bg text-white flex flex-col overflow-x-hidden">
@@ -223,10 +271,19 @@ export default function LandingPage() {
             </p>
           </Reveal>
 
-          {/* Grid: 2 large + 4 smaller */}
+          {/* Keep Kerala wide, with the forecast feature card beside it. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {DESTINATIONS.map((dest, i) => (
-              <DestinationCard key={dest.name} dest={dest} delay={0.1 + i * 0.08} />
+              <React.Fragment key={dest.name}>
+                <div className={dest.name === 'Kerala' ? 'md:col-span-1 lg:col-span-2' : ''}>
+                  <DestinationCard dest={dest} delay={0.1 + i * 0.08} />
+                </div>
+                {dest.name === 'Kerala' && (
+                  <div className="md:col-span-1">
+                    <ForecastFeatureCard delay={0.1 + (i + 1) * 0.08} />
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
 
@@ -238,6 +295,76 @@ export default function LandingPage() {
                 </button>
               </Link>
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── MOOD-BASED PLACE DISCOVERY ───────────────────────────── */}
+      <section className="py-20 md:py-28 px-6 md:px-10 relative overflow-hidden">
+        <AtmosphericBackground variant="itinerary" />
+        <div className="max-w-6xl mx-auto relative z-10">
+          <Reveal>
+            <p className="text-teal text-xs font-bold uppercase tracking-widest mb-3">Explore by your vibe</p>
+            <h2 className="text-4xl md:text-5xl font-bold font-display text-charcoal mb-4 tracking-tight">
+              Find places across your destination
+            </h2>
+            <p className="text-muted text-lg mb-10 max-w-2xl leading-relaxed">
+              Choose a destination and the moods you love. Once your trip is created, see real mapped places across the region, ranked around your preferences.
+            </p>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <form onSubmit={handlePlaceDiscovery} className="rounded-3xl border border-white/70 bg-white/85 p-6 md:p-9 shadow-travel-lg backdrop-blur-sm">
+              <label htmlFor="discovery-destination" className="block text-sm font-semibold text-charcoal mb-2">
+                Where do you want to explore?
+              </label>
+              <input
+                id="discovery-destination"
+                value={discoveryDestination}
+                onChange={event => setDiscoveryDestination(event.target.value)}
+                required
+                minLength={2}
+                maxLength={120}
+                pattern=".*\S.*"
+                placeholder="Try Kerala, Goa, or Jaipur"
+                className="h-12 w-full rounded-xl border border-muted/30 bg-white px-4 text-charcoal outline-none transition-colors placeholder:text-muted/70 focus:border-teal focus:ring-2 focus:ring-teal/15"
+              />
+
+              <fieldset className="mt-6">
+                <legend className="mb-3 text-sm font-semibold text-charcoal">What kind of places do you enjoy?</legend>
+                <div className="flex flex-wrap gap-2.5">
+                  {TRAVEL_MOODS.map(mood => {
+                    const isSelected = selectedMoods.includes(mood.id);
+                    return (
+                      <button
+                        key={mood.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => toggleMood(mood.id)}
+                        className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                          isSelected
+                            ? 'border-teal bg-teal text-white shadow-md shadow-teal/20'
+                            : 'border-muted/25 bg-white text-charcoal hover:border-teal/60 hover:bg-teal/5'
+                        }`}
+                      >
+                        {mood.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted">Select any moods that fit; you can change them later.</p>
+              </fieldset>
+
+              <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal px-6 py-3.5 font-semibold text-white shadow-lg shadow-teal/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-bright hover:shadow-xl"
+                >
+                  Discover mapped places <ArrowRight className="h-4 w-4" />
+                </button>
+                <span className="text-xs text-muted">Your selections are carried into trip setup. No sample listings.</span>
+              </div>
+            </form>
           </Reveal>
         </div>
       </section>

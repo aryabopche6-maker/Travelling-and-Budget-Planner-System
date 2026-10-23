@@ -2,6 +2,7 @@ package com.wanderplan.sos;
 
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class SOSResponse {
     private Long id;
@@ -15,6 +16,7 @@ public class SOSResponse {
     private String status; // ACTIVE, SAFE, RESOLVED
     private LocalDateTime createdTime;
     private LocalDateTime updatedTime;
+    private List<SOSDeliveryResult> smsDeliveryResults;
 
     public SOSResponse() {}
 
@@ -120,6 +122,14 @@ public class SOSResponse {
         this.updatedTime = updatedTime;
     }
 
+    public List<SOSDeliveryResult> getSmsDeliveryResults() {
+        return smsDeliveryResults;
+    }
+
+    public void setSmsDeliveryResults(List<SOSDeliveryResult> smsDeliveryResults) {
+        this.smsDeliveryResults = smsDeliveryResults;
+    }
+
     public static SOSResponseBuilder builder() {
         return new SOSResponseBuilder();
     }
@@ -136,6 +146,7 @@ public class SOSResponse {
         private String status;
         private LocalDateTime createdTime;
         private LocalDateTime updatedTime;
+        private List<SOSDeliveryResult> smsDeliveryResults;
 
         public SOSResponseBuilder() {}
 
@@ -194,8 +205,15 @@ public class SOSResponse {
             return this;
         }
 
+        public SOSResponseBuilder smsDeliveryResults(List<SOSDeliveryResult> smsDeliveryResults) {
+            this.smsDeliveryResults = smsDeliveryResults;
+            return this;
+        }
+
         public SOSResponse build() {
-            return new SOSResponse(this.id, this.tripId, this.userId, this.userName, this.userPhone, this.emergencyType, this.latitude, this.longitude, this.status, this.createdTime, this.updatedTime);
+            SOSResponse response = new SOSResponse(this.id, this.tripId, this.userId, this.userName, this.userPhone, this.emergencyType, this.latitude, this.longitude, this.status, this.createdTime, this.updatedTime);
+            response.setSmsDeliveryResults(this.smsDeliveryResults);
+            return response;
         }
     }
 

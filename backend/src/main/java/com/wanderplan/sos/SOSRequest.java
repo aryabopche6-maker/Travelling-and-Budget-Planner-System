@@ -1,7 +1,6 @@
 package com.wanderplan.sos;
 
 import jakarta.validation.constraints.NotBlank;
-
 public class SOSRequest {
     @NotBlank(message = "Emergency type is required")
     private String emergencyType;

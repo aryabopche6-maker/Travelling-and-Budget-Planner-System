@@ -138,13 +138,14 @@ public class ItineraryService {
         }
 
         String hotelName = selectedHotelOpt.map(TripSelectedHotel::getName)
-                .orElse(candidateHotel != null ? candidateHotel.getName() : "Featured Resort & Stay");
+                .orElse(candidateHotel != null ? candidateHotel.getName() : null);
         String hotelLocation = selectedHotelOpt.map(TripSelectedHotel::getLocation)
                 .orElse(candidateHotel != null ? candidateHotel.getLocation() : trip.getDestination());
         String hotelImage = selectedHotelOpt.map(TripSelectedHotel::getImageUrl)
                 .orElse(candidateHotel != null ? candidateHotel.getImageUrl() : null);
-        Double hotelPrice = selectedHotelOpt.map(TripSelectedHotel::getPricePerNight)
-                .orElse(candidateHotel != null ? candidateHotel.getPricePerNight() : 3500.0);
+        Double hotelPrice = selectedHotelOpt.isPresent()
+                ? selectedHotelOpt.get().getPricePerNight()
+                : candidateHotel != null ? candidateHotel.getPricePerNight() : null;
 
         // Divide selected places across days (approx 2 places per day)
         // If not enough selected places, fill remaining with candidates or destination highlights
@@ -170,7 +171,7 @@ public class ItineraryService {
             int order = 1;
 
             // Day 1: Check-in activity
-            if (dayNum == 1) {
+            if (dayNum == 1 && hotelName != null) {
                 acts.add(ItineraryActivity.builder()
                         .itineraryDay(day)
                         .time("11:00 AM")
@@ -183,7 +184,7 @@ public class ItineraryService {
                         .orderIndex(order++)
                         .imageUrl(hotelImage)
                         .build());
-            } else {
+            } else if (dayNum > 1 && hotelName != null) {
                 acts.add(ItineraryActivity.builder()
                         .itineraryDay(day)
                         .time("08:30 AM")
@@ -207,7 +208,7 @@ public class ItineraryService {
                         .title(sp.getName())
                         .category(sp.getCategory() != null ? sp.getCategory() : "Attraction")
                         .location(sp.getLocation() != null ? sp.getLocation() : trip.getDestination())
-                        .estimatedCost(sp.getEstimatedCost() != null ? sp.getEstimatedCost() : 0.0)
+                        .estimatedCost(sp.getEstimatedCost())
                         .duration(sp.getDuration() != null ? sp.getDuration() : "2 hrs")
                         .isOutdoor(true)
                         .orderIndex(order++)
@@ -221,7 +222,7 @@ public class ItineraryService {
                         .title(cp.getName())
                         .category(cp.getCategory() != null ? cp.getCategory() : "Attraction")
                         .location(cp.getLocation() != null ? cp.getLocation() : trip.getDestination())
-                        .estimatedCost(cp.getEstimatedCost() != null ? cp.getEstimatedCost() : 0.0)
+                        .estimatedCost(cp.getEstimatedCost())
                         .duration(cp.getDuration() != null ? cp.getDuration() : "2 hrs")
                         .isOutdoor(true)
                         .orderIndex(order++)

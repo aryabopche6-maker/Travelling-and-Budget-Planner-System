@@ -10,6 +10,8 @@ public class WeatherForecastResponse {
     private Double windSpeed;
     private List<DailyForecastDto> dailyForecasts;
     private List<WeatherConflictDto> weatherConflicts;
+    private String forecastSource;
+    private String forecastNote;
 
     public WeatherForecastResponse() {}
 
@@ -43,6 +45,10 @@ public class WeatherForecastResponse {
 
     public List<WeatherConflictDto> getWeatherConflicts() { return weatherConflicts; }
     public void setWeatherConflicts(List<WeatherConflictDto> weatherConflicts) { this.weatherConflicts = weatherConflicts; }
+    public String getForecastSource() { return forecastSource; }
+    public void setForecastSource(String forecastSource) { this.forecastSource = forecastSource; }
+    public String getForecastNote() { return forecastNote; }
+    public void setForecastNote(String forecastNote) { this.forecastNote = forecastNote; }
 
     public static WeatherForecastResponseBuilder builder() {
         return new WeatherForecastResponseBuilder();
@@ -56,6 +62,8 @@ public class WeatherForecastResponse {
         private Double windSpeed;
         private List<DailyForecastDto> dailyForecasts;
         private List<WeatherConflictDto> weatherConflicts;
+        private String forecastSource;
+        private String forecastNote;
 
         public WeatherForecastResponseBuilder destination(String destination) { this.destination = destination; return this; }
         public WeatherForecastResponseBuilder currentTemperature(Double currentTemperature) { this.currentTemperature = currentTemperature; return this; }
@@ -64,9 +72,14 @@ public class WeatherForecastResponse {
         public WeatherForecastResponseBuilder windSpeed(Double windSpeed) { this.windSpeed = windSpeed; return this; }
         public WeatherForecastResponseBuilder dailyForecasts(List<DailyForecastDto> dailyForecasts) { this.dailyForecasts = dailyForecasts; return this; }
         public WeatherForecastResponseBuilder weatherConflicts(List<WeatherConflictDto> weatherConflicts) { this.weatherConflicts = weatherConflicts; return this; }
+        public WeatherForecastResponseBuilder forecastSource(String forecastSource) { this.forecastSource = forecastSource; return this; }
+        public WeatherForecastResponseBuilder forecastNote(String forecastNote) { this.forecastNote = forecastNote; return this; }
 
         public WeatherForecastResponse build() {
-            return new WeatherForecastResponse(destination, currentTemperature, currentCondition, rainProbability, windSpeed, dailyForecasts, weatherConflicts);
+            WeatherForecastResponse response = new WeatherForecastResponse(destination, currentTemperature, currentCondition, rainProbability, windSpeed, dailyForecasts, weatherConflicts);
+            response.setForecastSource(forecastSource);
+            response.setForecastNote(forecastNote);
+            return response;
         }
     }
 
@@ -138,6 +151,7 @@ public class WeatherForecastResponse {
         private String warningMessage;
         private String suggestedAlternative;
         private Double budgetImpact;
+        private Long itineraryDayId;
 
         public WeatherConflictDto() {}
 
@@ -163,6 +177,8 @@ public class WeatherForecastResponse {
 
         public Double getBudgetImpact() { return budgetImpact; }
         public void setBudgetImpact(Double budgetImpact) { this.budgetImpact = budgetImpact; }
+        public Long getItineraryDayId() { return itineraryDayId; }
+        public void setItineraryDayId(Long itineraryDayId) { this.itineraryDayId = itineraryDayId; }
 
         public static WeatherConflictDtoBuilder builder() {
             return new WeatherConflictDtoBuilder();
@@ -174,15 +190,19 @@ public class WeatherForecastResponse {
             private String warningMessage;
             private String suggestedAlternative;
             private Double budgetImpact;
+            private Long itineraryDayId;
 
             public WeatherConflictDtoBuilder date(String date) { this.date = date; return this; }
             public WeatherConflictDtoBuilder activityTitle(String activityTitle) { this.activityTitle = activityTitle; return this; }
             public WeatherConflictDtoBuilder warningMessage(String warningMessage) { this.warningMessage = warningMessage; return this; }
             public WeatherConflictDtoBuilder suggestedAlternative(String suggestedAlternative) { this.suggestedAlternative = suggestedAlternative; return this; }
             public WeatherConflictDtoBuilder budgetImpact(Double budgetImpact) { this.budgetImpact = budgetImpact; return this; }
+            public WeatherConflictDtoBuilder itineraryDayId(Long itineraryDayId) { this.itineraryDayId = itineraryDayId; return this; }
 
             public WeatherConflictDto build() {
-                return new WeatherConflictDto(date, activityTitle, warningMessage, suggestedAlternative, budgetImpact);
+                WeatherConflictDto conflict = new WeatherConflictDto(date, activityTitle, warningMessage, suggestedAlternative, budgetImpact);
+                conflict.setItineraryDayId(itineraryDayId);
+                return conflict;
             }
         }
     }

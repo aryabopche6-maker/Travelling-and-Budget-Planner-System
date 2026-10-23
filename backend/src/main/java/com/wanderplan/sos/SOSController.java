@@ -17,6 +17,42 @@ public class SOSController {
     @Autowired
     private SOSService sosService;
 
+    @GetMapping("/contacts")
+    public ResponseEntity<ApiResponse<List<SOSContactResponse>>> getContacts(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        List<SOSContactResponse> contacts = sosService.getContacts(tripId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Emergency contacts retrieved", contacts));
+    }
+
+    @PostMapping("/contacts")
+    public ResponseEntity<ApiResponse<SOSContactResponse>> addContact(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody SOSContactRequest request) {
+        SOSContactResponse contact = sosService.addContact(tripId, userPrincipal.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Emergency contact added", contact));
+    }
+
+    @PutMapping("/contacts/{contactId}")
+    public ResponseEntity<ApiResponse<SOSContactResponse>> updateContact(
+            @PathVariable Long tripId,
+            @PathVariable Long contactId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody SOSContactRequest request) {
+        SOSContactResponse contact = sosService.updateContact(tripId, contactId, userPrincipal.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Emergency contact updated", contact));
+    }
+
+    @DeleteMapping("/contacts/{contactId}")
+    public ResponseEntity<ApiResponse<Void>> deleteContact(
+            @PathVariable Long tripId,
+            @PathVariable Long contactId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        sosService.deleteContact(tripId, contactId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Emergency contact deleted", null));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<SOSResponse>>> getSOSAlerts(
             @PathVariable Long tripId,

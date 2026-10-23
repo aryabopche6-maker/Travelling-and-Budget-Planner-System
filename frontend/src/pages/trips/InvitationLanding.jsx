@@ -4,7 +4,7 @@ import { invitationService } from '../../services/invitationService';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import { Mail, Check, X, Loader2, MapPin, Calendar, User } from 'lucide-react';
+import { Link2, Check, X, Loader2, MapPin, Calendar, User } from 'lucide-react';
 import PageTransition from '../../components/common/PageTransition';
 
 export default function InvitationLanding() {
@@ -35,7 +35,7 @@ export default function InvitationLanding() {
         // Not logged in -> redirect based on whether signup is required
         const targetPath = invitationDetails?.requiresSignup ? '/signup' : '/login';
         navigate(`${targetPath}?inviteToken=${token}&email=${encodeURIComponent(invitationDetails?.invitedEmail || '')}`, { replace: true });
-      } else if (invitationDetails && user.email.toLowerCase() !== invitationDetails.invitedEmail?.toLowerCase()) {
+      } else if (invitationDetails?.invitedEmail && user.email.toLowerCase() !== invitationDetails.invitedEmail.toLowerCase()) {
         // Mismatched email -> clear session and redirect
         logout().then(() => {
            const targetPath = invitationDetails?.requiresSignup ? '/signup' : '/login';
@@ -74,7 +74,7 @@ export default function InvitationLanding() {
     }
 
     // Safeguard for email mismatch
-    if (invitationDetails && user.email.toLowerCase() !== invitationDetails.invitedEmail?.toLowerCase()) {
+    if (invitationDetails?.invitedEmail && user.email.toLowerCase() !== invitationDetails.invitedEmail.toLowerCase()) {
       logout().then(() => {
         const targetPath = invitationDetails?.requiresSignup ? '/signup' : '/login';
         navigate(`${targetPath}?inviteToken=${token}&email=${encodeURIComponent(invitationDetails?.invitedEmail || '')}`, { replace: true });
@@ -140,7 +140,7 @@ export default function InvitationLanding() {
           {/* Logo / Icon */}
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-teal/10 rounded-2xl flex items-center justify-center">
-              <Mail className="w-8 h-8 text-teal" />
+              <Link2 className="w-8 h-8 text-teal" />
             </div>
           </div>
 

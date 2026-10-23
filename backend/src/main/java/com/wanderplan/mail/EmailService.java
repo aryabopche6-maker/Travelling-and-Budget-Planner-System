@@ -10,11 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 
 @Service
 public class EmailService {
@@ -33,8 +31,7 @@ public class EmailService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
-    @Async
-    public void sendTripInvitationEmail(TripInvitation invitation) {
+    public boolean sendTripInvitationEmail(TripInvitation invitation) {
         Trip trip = invitation.getTrip();
         String toEmail = invitation.getInvitedEmail();
         String inviterName = invitation.getInvitedBy() != null ? invitation.getInvitedBy().getName() : "A friend";
@@ -48,32 +45,27 @@ public class EmailService {
         String acceptUrl = frontendUrl + "/invitations/accept?token=" + invitation.getToken();
         String declineUrl = frontendUrl + "/invitations/decline?token=" + invitation.getToken();
 
-        // Security Rule 1: Log tokens and URLs ONLY in non-production development environments
-        if (isDevelopmentEnvironment()) {
-            log.info("📧 [DEV ONLY] Trip invitation generated for {}: Accept URL -> {}, Decline URL -> {}",
-                    toEmail, acceptUrl, declineUrl);
-        } else {
-            log.info("📧 Trip invitation dispatched to recipient");
+        if (mailSender == null || mailUsername == null || mailUsername.isBlank()
+                || environment.getProperty("spring.mail.password", "").isBlank()) {
+            log.error("Invitation email was not sent because SMTP is not configured. Set MAIL_USERNAME and MAIL_PASSWORD.");
+            return false;
         }
 
-        // Send real SMTP email if mail credentials are configured
-        if (mailSender != null && mailUsername != null && !mailUsername.isBlank()) {
-            try {
-                MimeMessage message = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setFrom(mailUsername, "WanderPlan Travel Planner");
-                helper.setTo(toEmail);
-                helper.setSubject("✈️ You're Invited! Join " + inviterName + " on a trip to " + destination);
-                helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
+            helper.setFrom(mailUsername, "WanderPlan Travel Planner");
+            helper.setTo(toEmail);
+            helper.setSubject("You're Invited! Join " + inviterName + " on a trip to " + destination);
+            helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
 
-                mailSender.send(message);
-                log.info("✅ Live invitation email successfully sent via SMTP to {}", toEmail);
-            } catch (Exception e) {
-                log.error("Failed to deliver SMTP invitation email to {}: {}", toEmail, e.getMessage());
-            }
-        } else {
-            log.info("ℹ️ SMTP credentials (MAIL_USERNAME) not configured. Email logged to dev console; invitation saved with token in database.");
+            mailSender.send(message);
+            log.info("Invitation email accepted by SMTP for invitation {}", invitation.getId());
+            return true;
+        } catch (Exception e) {
+            log.error("SMTP invitation delivery failed for invitation {}", invitation.getId(), e);
+            return false;
         }
     }
 
@@ -111,9 +103,4 @@ public class EmailService {
         return sb.toString();
     }
 
-    private boolean isDevelopmentEnvironment() {
-        String[] activeProfiles = environment.getActiveProfiles();
-        if (activeProfiles.length == 0) return true; // Default profile is development
-        return Arrays.stream(activeProfiles).noneMatch(p -> p.equalsIgnoreCase("prod") || p.equalsIgnoreCase("production"));
-    }
 }

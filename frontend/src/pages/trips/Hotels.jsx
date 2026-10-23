@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, Star, Wifi, Coffee, Wind, Info, Hotel, Filter, RefreshCw, Sparkles, ExternalLink, Building2, Crosshair, Check, CheckCircle2 } from 'lucide-react';
 import { useTrip } from '../../context/TripContext';
 import { tripService } from '../../services/tripService';
 import { itineraryService } from '../../services/itineraryService';
-import api from '../../services/api';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import PageTransition from '../../components/common/PageTransition';
@@ -15,6 +14,7 @@ export default function Hotels() {
   const { trip } = useTrip();
   const [hotels, setHotels] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchError, setSearchError] = useState('');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [isExternalConfigured, setIsExternalConfigured] = useState(false);
@@ -22,10 +22,12 @@ export default function Hotels() {
   // Selected Hotel state
   const [selectedHotel, setSelectedHotel] = useState(null);
   const [isSelectingHotel, setIsSelectingHotel] = useState(false);
+  const [selectionError, setSelectionError] = useState('');
 
   const [searchAreaInput, setSearchAreaInput] = useState('');
   const [activeSearchArea, setActiveSearchArea] = useState('');
   const [radius, setRadius] = useState(10);
+  const searchRequestId = useRef(0);
 
   const loadSavedHotel = async () => {
     if (!trip?.id) return;
@@ -40,6 +42,7 @@ export default function Hotels() {
   const handleSelectHotel = async (hotel) => {
     if (!trip?.id || !hotel?.name) return;
     setIsSelectingHotel(true);
+    setSelectionError('');
     try {
       if (selectedHotel && selectedHotel.name?.toLowerCase() === hotel.name?.toLowerCase()) {
         // Deselect
@@ -51,23 +54,30 @@ export default function Hotels() {
       }
     } catch (err) {
       console.error("Failed to update selected hotel:", err);
+      setSelectionError(err.response?.data?.message || 'Could not save this stay. Please try again.');
     } finally {
       setIsSelectingHotel(false);
     }
   };
 
   const fetchHotels = async (location = '', r = 10) => {
+    const requestId = ++searchRequestId.current;
     setIsLoading(true);
+    setSearchError('');
     try {
       const data = await tripService.getHotels(trip.id, location, r);
-      if (data?.hotels) {
-        setHotels(data.hotels);
+      if (requestId === searchRequestId.current) {
+        setHotels(Array.isArray(data?.hotels) ? data.hotels : []);
         setIsExternalConfigured(data.isExternalConfigured || false);
       }
     } catch (error) {
       console.error('Failed to fetch hotels from backend:', error);
+      if (requestId === searchRequestId.current) {
+        setHotels([]);
+        setSearchError(error.response?.data?.message || 'Could not load accommodation listings. Check your connection and try again.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === searchRequestId.current) setIsLoading(false);
     }
   };
 
@@ -80,8 +90,9 @@ export default function Hotels() {
 
   const handleSearchArea = (e) => {
     e.preventDefault();
-    setActiveSearchArea(searchAreaInput);
-    fetchHotels(searchAreaInput, radius);
+    const area = searchAreaInput.trim();
+    setActiveSearchArea(area);
+    fetchHotels(area, radius);
   };
 
   const handleClearArea = () => {
@@ -129,7 +140,7 @@ export default function Hotels() {
                   {activeSearchArea ? `Hotels in ${activeSearchArea}` : 'Find Your Stay'}
                 </h1>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-teal/10 text-teal rounded-full border border-teal/20 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> {isExternalConfigured ? 'Amadeus Live API' : 'Live OSM Stays'}
+                  <Sparkles className="w-3 h-3" /> {isExternalConfigured && !activeSearchArea ? 'Live partner / map listings' : 'OpenStreetMap Listings'}
                 </span>
                 {hotels.length > 0 && (
                   <span className="text-[10px] font-bold px-2 py-0.5 bg-charcoal/10 text-charcoal rounded-full">
@@ -143,7 +154,7 @@ export default function Hotels() {
                 )}
               </div>
               <p className="text-muted mt-1">
-                Real accommodations in <strong className="text-charcoal">{activeSearchArea || trip?.destination}</strong> &bull; Selected hotel automatically sets check-in & breakfast in your <strong className="text-teal">Itinerary</strong>!
+                Map-listed stays near <strong className="text-charcoal">{activeSearchArea || trip?.destination}</strong> &bull; Selected hotel is saved to your <strong className="text-teal">Itinerary</strong>!
                 {userInterests.length > 0 && !activeSearchArea && (
                   <span> &bull; Matching vibe: <span className="text-teal font-semibold">{userInterests.join(', ')}</span></span>
                 )}
@@ -200,8 +211,9 @@ export default function Hotels() {
             <div className="relative flex-1">
               <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-teal" />
               <Input 
-                placeholder="Enter specific area/beach/locality (e.g. Banjara Hills, Candolim, Old City)" 
+                placeholder="Search area or locality (include city/state for accuracy)"
                 value={searchAreaInput}
+                maxLength={120}
                 onChange={(e) => setSearchAreaInput(e.target.value)}
                 className="pl-10 bg-white border-muted/30"
               />
@@ -254,45 +266,62 @@ export default function Hotels() {
         </div>
       </Reveal>
 
-      {isLoading ? (
-        <div className="space-y-4">
+      {isLoading && hotels.length === 0 ? (
+        <div className="space-y-4" role="status" aria-label="Loading stays">
           <div className="flex items-center justify-center gap-2 text-sm text-teal font-medium py-2">
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span>Finding best stays in {activeSearchArea || trip?.destination}...</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} className="rounded-2xl border border-muted/20 bg-white p-5 shadow-sm animate-pulse space-y-4">
-                <div className="h-44 bg-muted/15 rounded-xl w-full" />
-                <div className="space-y-2">
+            {[0, 1, 2].map((n) => (
+              <div key={n} className="overflow-hidden rounded-2xl border border-muted/20 bg-white shadow-sm animate-pulse">
+                <div className="h-52 bg-muted/15" />
+                <div className="p-5 space-y-4">
                   <div className="h-5 bg-muted/20 rounded w-2/3" />
-                  <div className="h-4 bg-muted/10 rounded w-1/3" />
+                  <div className="h-4 bg-muted/10 rounded w-1/2" />
+                  <div className="h-4 bg-muted/10 rounded w-full" />
+                  <div className="h-10 bg-muted/10 rounded-xl w-full" />
                 </div>
-                <div className="h-10 bg-muted/10 rounded-xl w-full" />
               </div>
             ))}
           </div>
         </div>
-      ) : filteredHotels.length === 0 ? (
+      ) : searchError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-10 text-center">
+          <Building2 className="mx-auto mb-3 h-10 w-10 text-rose-500" />
+          <h3 className="mb-1 text-lg font-bold text-rose-900">Stay search failed</h3>
+          <p className="mb-4 text-sm text-rose-800">{searchError}</p>
+          <Button onClick={() => fetchHotels(activeSearchArea, radius)} className="bg-teal text-white hover:bg-teal/90">
+            <RefreshCw className="mr-2 h-4 w-4" /> Try again
+          </Button>
+        </div>
+      ) : filteredHotels.length === 0 && !isLoading ? (
         <div className="py-12 text-center text-muted">
           <Building2 className="w-12 h-12 mx-auto mb-3 opacity-40 text-teal" />
-          <h3 className="text-lg font-bold text-charcoal mb-1">No accommodations found</h3>
-          <p className="text-sm">Try modifying your locality search or expanding the radius.</p>
+          <h3 className="text-lg font-bold text-charcoal mb-1">No mapped stays found nearby</h3>
+          <p className="text-sm">Try adding the city/state to the area or expanding the radius. Listings depend on map coverage.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredHotels.map((hotel, i) => (
+        <div aria-busy={isLoading} className="relative">
+          {isLoading && (
+            <div role="status" className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 text-sm font-medium text-teal">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Searching {activeSearchArea || trip?.destination}; showing current results until it finishes...
+            </div>
+          )}
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'}`}>
+            {filteredHotels.map((hotel, i) => (
             <Reveal key={hotel.id || i} delay={0.05 + i * 0.05}>
               <Card hoverLift className="p-0 overflow-hidden flex flex-col group border-muted/30 hover:border-teal/30 shadow-sm h-full card-travel">
                 <div className="h-52 relative overflow-hidden bg-gradient-to-br from-teal/20 via-sky/10 to-teal/5 flex items-center justify-center">
                   {hotel.imageUrl ? (
-                    <img src={hotel.imageUrl} alt={hotel.name} className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100" />
+                    <img src={hotel.imageUrl} alt={hotel.name} onError={(e) => { e.currentTarget.hidden = true; }} className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100" />
                   ) : (
                     <div className="p-8 text-center flex flex-col items-center gap-2">
                       <div className="w-14 h-14 rounded-2xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
                         <Building2 className="w-7 h-7" />
                       </div>
-                      <span className="text-xs font-semibold text-teal/80">Verified Accommodation</span>
+                      <span className="text-xs font-semibold text-teal/80">Map-listed accommodation</span>
                     </div>
                   )}
 
@@ -319,7 +348,7 @@ export default function Hotels() {
                     </div>
                   ) : (
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold text-muted border border-white/40 shadow-sm z-10">
-                      OSM Verified
+                      Map listing
                     </div>
                   )}
                 </div>
@@ -350,9 +379,9 @@ export default function Hotels() {
                   <div className="border-t border-muted/30 pt-4 mt-2 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs text-muted mb-0.5">Estimated Rate</p>
+                        <p className="text-xs text-muted mb-0.5">Listed rate</p>
                         <p className="font-bold text-base text-teal tracking-tight">
-                          {hotel.pricePerNight != null ? `₹${hotel.pricePerNight} / night` : 'Price on Booking'}
+                          {hotel.pricePerNight != null ? `${hotel.currency || '₹'}${hotel.pricePerNight} / night` : 'Rate not listed'}
                         </p>
                       </div>
                       <a 
@@ -386,12 +415,21 @@ export default function Hotels() {
                         </>
                       )}
                     </Button>
+                    {hotel.availabilityStatus === 'UNKNOWN' && (
+                      <p className="text-center text-[11px] text-muted">Availability is not provided by the map listing.</p>
+                    )}
                   </div>
                 </div>
               </Card>
             </Reveal>
-          ))}
+            ))}
+          </div>
         </div>
+      )}
+      {selectionError && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {selectionError}
+        </p>
       )}
     </PageTransition>
   );

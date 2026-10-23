@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, Clock, IndianRupee, Plus, Map, Filter, Navigation, X, Sparkles, RefreshCw, Compass, Crosshair, Check, CheckCircle2, Bookmark } from 'lucide-react';
 import { useTrip } from '../../context/TripContext';
 import { tripService } from '../../services/tripService';
 import { itineraryService } from '../../services/itineraryService';
-import api from '../../services/api';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import PageTransition from '../../components/common/PageTransition';
@@ -15,9 +14,11 @@ export default function Places() {
   const { trip } = useTrip();
   const [places, setPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchError, setSearchError] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [selectedPlace, setSelectedPlace] = useState(null);
+  const [selectionError, setSelectionError] = useState('');
 
   // User-selected places for Itinerary
   const [savedPlaceNames, setSavedPlaceNames] = useState(new Set());
@@ -26,6 +27,8 @@ export default function Places() {
   const [searchAreaInput, setSearchAreaInput] = useState('');
   const [activeSearchArea, setActiveSearchArea] = useState('');
   const [radius, setRadius] = useState(10);
+  const [visiblePlacesCount, setVisiblePlacesCount] = useState(24);
+  const searchRequestId = useRef(0);
 
   const loadSavedPlaces = async () => {
     if (!trip?.id) return;
@@ -45,6 +48,7 @@ export default function Places() {
     const nameLower = place.name.toLowerCase();
     const isAlreadySaved = savedPlaceNames.has(nameLower);
 
+    setSelectionError('');
     setSavingPlaceName(place.name);
     try {
       if (isAlreadySaved) {
@@ -64,22 +68,30 @@ export default function Places() {
       }
     } catch (err) {
       console.error("Failed to toggle place selection:", err);
+      setSelectionError(err.response?.data?.message || 'Could not update your itinerary. Please try again.');
     } finally {
       setSavingPlaceName(null);
     }
   };
 
   const fetchPlaces = async (location = '', r = 10) => {
+    const requestId = ++searchRequestId.current;
     setIsLoading(true);
+    setSearchError('');
     try {
       const data = await tripService.getPlaces(trip.id, location, r);
-      if (data?.places) {
-        setPlaces(data.places);
+      if (requestId === searchRequestId.current) {
+        setPlaces(Array.isArray(data?.places) ? data.places : []);
+        setVisiblePlacesCount(24);
       }
     } catch (error) {
       console.error('Failed to fetch live places:', error);
+      if (requestId === searchRequestId.current) {
+        setPlaces([]);
+        setSearchError(error.response?.data?.message || 'Could not load map listings. Check your connection and try again.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === searchRequestId.current) setIsLoading(false);
     }
   };
 
@@ -92,8 +104,9 @@ export default function Places() {
 
   const handleSearchArea = (e) => {
     e.preventDefault();
-    setActiveSearchArea(searchAreaInput);
-    fetchPlaces(searchAreaInput, radius);
+    const area = searchAreaInput.trim();
+    setActiveSearchArea(area);
+    fetchPlaces(area, radius);
   };
 
   const handleClearArea = () => {
@@ -133,6 +146,7 @@ export default function Places() {
 
     return true;
   });
+  const visiblePlaces = filteredPlaces.slice(0, visiblePlacesCount);
 
   return (
     <PageTransition variant="slideUp" className="max-w-6xl mx-auto space-y-8 pb-8">
@@ -147,8 +161,8 @@ export default function Places() {
                 <h1 className="text-3xl font-bold tracking-tight font-display text-charcoal">
                   {activeSearchArea ? `Places in ${activeSearchArea}` : 'Places & Attractions'}
                 </h1>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-teal/10 text-teal rounded-full border border-teal/20 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Live OSM Data
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-teal/10 text-teal rounded-full border border-teal/20 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" /> OpenStreetMap Listings
                 </span>
                 {places.length > 0 && (
                   <span className="text-[10px] font-bold px-2 py-0.5 bg-charcoal/10 text-charcoal rounded-full">
@@ -162,7 +176,9 @@ export default function Places() {
                 )}
               </div>
               <p className="text-muted mt-1">
-                Showing top curated landmarks in <strong className="text-charcoal">{activeSearchArea || trip?.destination}</strong> &bull; Selected places automatically populate your <strong className="text-teal">Itinerary</strong>!
+                {activeSearchArea
+                  ? <>Map listings near <strong className="text-charcoal">{activeSearchArea}</strong> within {radius} km &bull; Selected places automatically populate your <strong className="text-teal">Itinerary</strong>!</>
+                  : <>Showing mapped places across <strong className="text-charcoal">{trip?.destination}</strong> that match your selected moods &bull; Selected places automatically populate your <strong className="text-teal">Itinerary</strong>!</>}
                 {userInterests.length > 0 && !activeSearchArea && (
                   <span> &bull; Prioritizing your mood: <span className="text-teal font-semibold">{userInterests.join(', ')}</span></span>
                 )}
@@ -191,7 +207,7 @@ export default function Places() {
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-teal shrink-0" />
               <span className="text-charcoal font-medium">
-                Vibe matched for <strong>{trip?.destination}</strong>:
+                Your selected vibes for <strong>{trip?.destination}</strong>:
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {userInterests.map((interest) => (
@@ -207,7 +223,7 @@ export default function Places() {
               </div>
             </div>
             <span className="text-xs text-muted">
-              Matching spots automatically appear at the top!
+              Matching listings across your destination are shown first.
             </span>
           </div>
         </Reveal>
@@ -219,8 +235,9 @@ export default function Places() {
             <div className="relative flex-1">
               <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-teal" />
               <Input 
-                placeholder="Search specific locality/area (e.g. Banjara Hills, Baga Beach, Old Town...)" 
+                placeholder="Optional: narrow results to a city or area"
                 value={searchAreaInput}
+                maxLength={120}
                 onChange={(e) => setSearchAreaInput(e.target.value)}
                 className="pl-10 bg-white border-muted/30"
               />
@@ -230,6 +247,8 @@ export default function Places() {
               <select 
                 value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
+                disabled={!activeSearchArea && !searchAreaInput.trim()}
+                title={!activeSearchArea && !searchAreaInput.trim() ? 'Radius applies when you search a specific area' : undefined}
                 className="w-full pl-9 pr-3 py-2.5 bg-white border border-muted/30 rounded-xl text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-teal/50"
               >
                 <option value={3}>Within 3 km</option>
@@ -272,37 +291,67 @@ export default function Places() {
         </div>
       </Reveal>
 
-      {isLoading ? (
-        <div className="space-y-4">
+      {isLoading && places.length === 0 ? (
+        <div className="space-y-4" role="status" aria-label="Loading places">
           <div className="flex items-center justify-center gap-2 text-sm text-teal font-medium py-2">
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span>Discovering top spots in {activeSearchArea || trip?.destination}...</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="rounded-2xl border border-muted/20 bg-white p-6 shadow-sm animate-pulse space-y-4">
-                <div className="h-48 bg-muted/15 rounded-xl w-full" />
-                <div className="space-y-2">
+            {[0, 1, 2].map((n) => (
+              <div key={n} className={`rounded-2xl border border-muted/20 bg-white shadow-sm animate-pulse overflow-hidden ${n === 0 ? 'md:col-span-2 md:flex min-h-[250px]' : ''}`}>
+                <div className={`${n === 0 ? 'md:w-1/2 md:h-auto md:min-h-[250px]' : 'h-64'} shrink-0 bg-muted/15`} />
+                <div className="flex-1 p-6 space-y-4">
                   <div className="h-6 bg-muted/20 rounded w-3/4" />
                   <div className="h-4 bg-muted/10 rounded w-1/2" />
+                  <div className="h-4 bg-muted/10 rounded w-full" />
+                  <div className="h-10 bg-muted/10 rounded-xl w-full" />
                 </div>
-                <div className="h-10 bg-muted/10 rounded-xl w-full" />
               </div>
             ))}
           </div>
         </div>
-      ) : filteredPlaces.length === 0 ? (
+      ) : searchError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-6 py-10 text-center">
+          <Compass className="mx-auto mb-3 h-10 w-10 text-rose-500" />
+          <h3 className="mb-1 text-lg font-bold text-rose-900">Places search failed</h3>
+          <p className="mb-4 text-sm text-rose-800">{searchError}</p>
+          <Button onClick={() => fetchPlaces(activeSearchArea, radius)} className="bg-teal text-white hover:bg-teal/90">
+            <RefreshCw className="mr-2 h-4 w-4" /> Try again
+          </Button>
+        </div>
+      ) : filteredPlaces.length === 0 && !isLoading && places.length > 0 ? (
         <div className="py-12 text-center text-muted">
           <Compass className="w-12 h-12 mx-auto mb-3 opacity-40 text-teal" />
-          <h3 className="text-lg font-bold text-charcoal mb-1">No matching places found</h3>
-          <p className="text-sm">Try switching the category filter or changing your search terms.</p>
+          <h3 className="text-lg font-bold text-charcoal mb-1">No places match these filters</h3>
+          <p className="text-sm">There are {places.length} mapped places nearby, but none match “{filter === 'All' ? search : filter}”.</p>
+          <Button
+            variant="outline"
+            className="mt-4 border-teal/30 text-teal hover:bg-teal/5"
+            onClick={() => { setFilter('All'); setSearch(''); }}
+          >
+            Show all nearby places
+          </Button>
+        </div>
+      ) : filteredPlaces.length === 0 && !isLoading ? (
+        <div className="py-12 text-center text-muted">
+          <Compass className="w-12 h-12 mx-auto mb-3 opacity-40 text-teal" />
+          <h3 className="text-lg font-bold text-charcoal mb-1">No mapped places found nearby</h3>
+          <p className="text-sm">No mapped places were returned for this destination. Try a city or locality search to explore nearby listings.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {filteredPlaces.map((place, i) => {
+        <div aria-busy={isLoading} className="relative">
+          {isLoading && (
+            <div role="status" className="mb-4 flex items-center justify-center gap-2 rounded-xl border border-teal/20 bg-teal/5 px-4 py-3 text-sm font-medium text-teal">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Searching {activeSearchArea || trip?.destination}; showing current results until it finishes...
+            </div>
+          )}
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 transition-opacity duration-300 ${isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'}`}>
+            {visiblePlaces.map((place, i) => {
             const isFeatured = i === 0;
             return (
-              <Reveal key={place.id || place.name || i} delay={0.05 + i * 0.05} className={isFeatured ? 'md:col-span-2' : ''}>
+              <Reveal key={place.id || place.name || i} delay={Math.min(0.05 + i * 0.01, 0.2)} className={isFeatured ? 'md:col-span-2' : ''}>
                 <motion.div layoutId={`place-card-${place.id || place.name || i}`} className="h-full">
                   <Card hoverLift className={`p-0 overflow-hidden flex flex-col group border-muted/30 hover:border-teal/30 shadow-md hover:shadow-xl hover:shadow-teal/10 cursor-pointer card-travel h-full ${isFeatured ? 'md:flex-row' : ''}`} onClick={() => setSelectedPlace({...place, _uniqueId: place.id || place.name || i})}>
                     <motion.div layoutId={`place-image-${place.id || place.name || i}`} className={`${isFeatured ? 'md:w-1/2' : ''} h-64 md:h-auto min-h-[250px] shrink-0 relative overflow-hidden bg-gradient-to-br from-teal/20 via-sky/10 to-teal/5 flex items-center justify-center`}>
@@ -310,7 +359,7 @@ export default function Places() {
                         <img 
                           src={place.imageUrl} 
                           alt={place.name} 
-                          onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=800&q=80'; }}
+                          onError={(e) => { e.currentTarget.hidden = true; }}
                           className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100" 
                         />
                       ) : (
@@ -318,7 +367,7 @@ export default function Places() {
                           <div className="w-14 h-14 rounded-2xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
                             <Compass className="w-7 h-7" />
                           </div>
-                          <span className="text-xs font-semibold text-teal/80">OpenStreetMap Verified Spot</span>
+                          <span className="text-xs font-semibold text-teal/80">OpenStreetMap listing</span>
                         </div>
                       )}
                       <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 items-center">
@@ -345,7 +394,7 @@ export default function Places() {
                             {place.name}
                           </motion.h3>
                           <span className="text-sm font-bold text-muted flex items-center gap-1 shrink-0 bg-bg px-2.5 py-1 rounded-md border border-muted/30">
-                            {place.rating ? `★ ${place.rating}` : 'OSM Verified'}
+                            {place.rating != null ? `★ ${place.rating}` : 'Map listing'}
                           </span>
                         </div>
                         
@@ -361,7 +410,7 @@ export default function Places() {
                         </div>
                         
                         <p className={`text-base text-muted mb-4 leading-relaxed ${isFeatured ? '' : 'line-clamp-3'}`}>
-                          {place.description || 'Verified landmark in destination.'}
+                          {place.description || 'No description provided by the map listing.'}
                         </p>
 
                         {place.tags && place.tags.length > 0 && (
@@ -381,7 +430,7 @@ export default function Places() {
                             <IndianRupee className="w-5 h-5" />
                           </div>
                           <span className="font-semibold text-charcoal text-sm">
-                            {place.estimatedCost != null ? `₹${place.estimatedCost}` : 'Free / Public'}
+                            {place.estimatedCost != null ? `₹${place.estimatedCost}` : 'Cost not listed'}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 bg-bg p-3.5 rounded-xl border border-muted/30">
@@ -389,7 +438,7 @@ export default function Places() {
                             <Clock className="w-5 h-5" />
                           </div>
                           <span className="font-semibold text-charcoal text-sm">
-                            {place.duration || '1.5 - 2 hrs'}
+                            {place.duration || 'Duration not listed'}
                           </span>
                         </div>
                       </div>
@@ -442,7 +491,20 @@ export default function Places() {
                 </motion.div>
               </Reveal>
             );
-          })}
+            })}
+          </div>
+          {!isLoading && filteredPlaces.length > visiblePlaces.length && (
+            <div className="mt-8 flex flex-col items-center gap-2">
+              <p className="text-xs text-muted">Showing {visiblePlaces.length} of {filteredPlaces.length} mapped places</p>
+              <Button
+                variant="outline"
+                className="border-teal/30 text-teal hover:bg-teal/5"
+                onClick={() => setVisiblePlacesCount(count => Math.min(count + 24, filteredPlaces.length))}
+              >
+                Load more places
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -467,7 +529,7 @@ export default function Places() {
                   <img 
                     src={selectedPlace.imageUrl} 
                     alt={selectedPlace.name} 
-                    onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=800&q=80'; }}
+                    onError={(e) => { e.currentTarget.hidden = true; }}
                     className="w-full h-full object-cover" 
                   />
                 ) : (
@@ -475,7 +537,7 @@ export default function Places() {
                     <div className="w-20 h-20 rounded-3xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
                       <Compass className="w-10 h-10" />
                     </div>
-                    <span className="text-sm font-semibold text-teal">OpenStreetMap Indexed Attraction</span>
+                    <span className="text-sm font-semibold text-teal">OpenStreetMap listing</span>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -498,7 +560,7 @@ export default function Places() {
               <div className="p-6 md:p-8 space-y-6 bg-white">
                 <div className="flex items-center gap-4 flex-wrap">
                   <span className="text-sm font-bold text-muted flex items-center gap-1 bg-bg px-3 py-1.5 rounded-lg border border-muted/30">
-                    {selectedPlace.rating ? `★ ${selectedPlace.rating}` : 'OSM Verified'}
+                    {selectedPlace.rating != null ? `★ ${selectedPlace.rating}` : 'Map listing'}
                   </span>
                   <span className="text-sm text-muted flex items-center gap-1.5 font-medium">
                     <MapPin className="w-4 h-4 text-teal" /> {selectedPlace.location || trip?.destination}
@@ -506,7 +568,7 @@ export default function Places() {
                 </div>
                 
                 <p className="text-muted leading-relaxed text-base">
-                  {selectedPlace.description || 'Landmark information fetched live from OpenStreetMap.'}
+                  {selectedPlace.description || 'No description provided by the map listing.'}
                 </p>
 
                 <div className="grid grid-cols-2 gap-4 text-sm text-muted">
@@ -517,7 +579,7 @@ export default function Places() {
                     <div>
                       <p className="text-xs text-muted mb-0.5">Entry Cost</p>
                       <span className="font-bold text-charcoal">
-                        {selectedPlace.estimatedCost != null ? `₹${selectedPlace.estimatedCost}` : 'Free / Public Access'}
+                        {selectedPlace.estimatedCost != null ? `₹${selectedPlace.estimatedCost}` : 'Cost not listed'}
                       </span>
                     </div>
                   </div>
@@ -528,7 +590,7 @@ export default function Places() {
                     <div>
                       <p className="text-xs text-muted mb-0.5">Recommended Time</p>
                       <span className="font-bold text-charcoal">
-                        {selectedPlace.duration || '1 - 2 Hours'}
+                        {selectedPlace.duration || 'Duration not listed'}
                       </span>
                     </div>
                   </div>
@@ -554,6 +616,7 @@ export default function Places() {
                       </>
                     )}
                   </Button>
+                  {selectionError && <p role="alert" className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{selectionError}</p>}
 
                   {selectedPlace.latitude && selectedPlace.longitude && (
                     <a 

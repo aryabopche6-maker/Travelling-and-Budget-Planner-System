@@ -8,27 +8,34 @@ import com.wanderplan.itinerary.ItineraryDayRepository;
 import com.wanderplan.trip.Trip;
 import com.wanderplan.trip.TripRepository;
 import com.wanderplan.trip.TripService;
+import com.wanderplan.exception.ResourceNotFoundException;
+import com.wanderplan.exception.BadRequestException;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class WeatherService {
 
     private static final Logger log = LoggerFactory.getLogger(WeatherService.class);
-
-    @Value("${app.external.weather.api-key:NO_KEY}")
-    private String weatherApiKey;
+    private static final int MAX_FORECAST_DAYS = 16;
+    private static final long GEOCODING_INTERVAL_MS = 1_000;
+    private static final Map<String, Coordinates> GEOCODE_CACHE = new ConcurrentHashMap<>();
+    private static long lastGeocodingRequestAt;
 
     @Autowired
     private TripRepository tripRepository;
@@ -46,191 +53,231 @@ public class WeatherService {
 
     public WeatherForecastResponse getWeatherForTrip(Long tripId, Long userId) {
         tripService.validateTripMembership(tripId, userId);
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
-        Trip trip = tripRepository.findById(tripId).orElse(null);
-        String destination = trip != null ? trip.getDestination() : "Goa";
-
-        // Try OpenWeatherMap if API key is configured
-        if (isExternalApiConfigured()) {
-            try {
-                WeatherForecastResponse owmResponse = fetchOpenWeatherMapForecast(destination, trip);
-                if (owmResponse != null) {
-                    return owmResponse;
-                }
-            } catch (Exception e) {
-                log.warn("OpenWeatherMap API call failed, falling back to Open-Meteo: {}", e.getMessage());
-            }
+        String destination = trip.getDestination();
+        if (destination == null || destination.isBlank()) {
+            throw new WeatherUnavailableException("Add a trip destination to view its weather forecast.");
         }
 
-        // Live primary provider: Open-Meteo (Real Global Weather API, zero-key required)
         try {
             return fetchOpenMeteoForecast(destination, trip);
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (WeatherUnavailableException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to fetch live weather from Open-Meteo for {}: {}", destination, e.getMessage());
-            return buildFallbackForecast(destination, trip);
+            log.error("Failed to fetch live weather for trip {} destination {}: {}", tripId, destination, e.getMessage());
+            throw new WeatherUnavailableException("Live weather is temporarily unavailable. Please try again shortly.", e);
         }
     }
 
     private WeatherForecastResponse fetchOpenMeteoForecast(String destination, Trip trip) throws Exception {
-        // 1. Geocoding to obtain real coordinates for destination
-        String cleanCity = destination.split(",")[0].trim();
-        String geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=" + URLEncoder.encode(cleanCity, StandardCharsets.UTF_8) + "&count=1&language=en&format=json";
-        
-        String geoJson = restTemplate.getForObject(geoUrl, String.class);
-        JsonNode geoRoot = objectMapper.readTree(geoJson);
-        
-        double lat = 15.2993; // default fallback if geocoding yields no results
-        double lon = 74.1240;
-        
-        if (geoRoot.has("results") && geoRoot.get("results").isArray() && geoRoot.get("results").size() > 0) {
-            JsonNode firstResult = geoRoot.get("results").get(0);
-            lat = firstResult.path("latitude").asDouble(lat);
-            lon = firstResult.path("longitude").asDouble(lon);
-        }
+        Coordinates coordinates = resolveCoordinates(destination);
 
-        // 2. Fetch real 7-day live weather forecast
-        String weatherUrl = UriComponentsBuilder.fromHttpUrl("https://api.open-meteo.com/v1/forecast")
-                .queryParam("latitude", lat)
-                .queryParam("longitude", lon)
-                .queryParam("daily", "weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,windspeed_10m_max")
-                .queryParam("current_weather", true)
+        double latitude = coordinates.latitude();
+        double longitude = coordinates.longitude();
+        String forecastUrl = UriComponentsBuilder.fromUriString("https://api.open-meteo.com/v1/forecast")
+                .queryParam("latitude", latitude)
+                .queryParam("longitude", longitude)
+                .queryParam("current", "temperature_2m,weather_code,wind_speed_10m")
+                .queryParam("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max")
+                .queryParam("forecast_days", MAX_FORECAST_DAYS)
                 .queryParam("timezone", "auto")
                 .toUriString();
 
-        String weatherJson = restTemplate.getForObject(weatherUrl, String.class);
-        JsonNode weatherRoot = objectMapper.readTree(weatherJson);
-
-        JsonNode currentWeather = weatherRoot.path("current_weather");
-        double currentTemp = currentWeather.path("temperature").asDouble(26.0);
-        int currentCode = currentWeather.path("weathercode").asInt(0);
-        double currentWind = currentWeather.path("windspeed").asDouble(10.0);
-
-        JsonNode daily = weatherRoot.path("daily");
+        String forecastJson = restTemplate.getForObject(forecastUrl, String.class);
+        JsonNode root = objectMapper.readTree(forecastJson);
+        JsonNode current = root.path("current");
+        JsonNode daily = root.path("daily");
         JsonNode dates = daily.path("time");
+        if (!current.isObject() || !dates.isArray() || dates.isEmpty()) {
+            throw new WeatherUnavailableException("The weather provider returned an incomplete forecast. Please try again.");
+        }
+
+        LocalDate today = LocalDate.parse(dates.get(0).asText());
+        LocalDate forecastEnd = today.plusDays(MAX_FORECAST_DAYS - 1);
+        JsonNode currentTempNode = current.path("temperature_2m");
+        JsonNode currentCodeNode = current.path("weather_code");
+        JsonNode currentWindNode = current.path("wind_speed_10m");
+        if (!currentTempNode.isNumber() || !currentCodeNode.isNumber() || !currentWindNode.isNumber()) {
+            throw new WeatherUnavailableException("The weather provider returned incomplete current conditions.");
+        }
+
+        ForecastRange range = selectForecastRange(trip, today, forecastEnd);
+        List<WeatherForecastResponse.DailyForecastDto> forecasts = new ArrayList<>();
+        List<WeatherForecastResponse.WeatherConflictDto> conflicts = new ArrayList<>();
+        List<ItineraryDay> itineraryDays = itineraryDayRepository.findWithActivitiesByTripId(trip.getId());
         JsonNode maxTemps = daily.path("temperature_2m_max");
         JsonNode minTemps = daily.path("temperature_2m_min");
-        JsonNode rainProbs = daily.path("precipitation_probability_max");
-        JsonNode weatherCodes = daily.path("weathercode");
+        JsonNode rainProbabilities = daily.path("precipitation_probability_max");
+        JsonNode weatherCodes = daily.path("weather_code");
 
-        List<WeatherForecastResponse.DailyForecastDto> dailyForecasts = new ArrayList<>();
-        List<WeatherForecastResponse.WeatherConflictDto> conflicts = new ArrayList<>();
+        for (int i = 0; i < dates.size(); i++) {
+            String date = dates.get(i).asText();
+            LocalDate forecastDate = LocalDate.parse(date);
+            if (forecastDate.isBefore(range.start()) || forecastDate.isAfter(range.end())) {
+                continue;
+            }
 
-        int count = dates.isArray() ? dates.size() : 0;
-        for (int i = 0; i < Math.min(count, 7); i++) {
-            String dateStr = dates.get(i).asText();
-            double tempMax = maxTemps.has(i) ? maxTemps.get(i).asDouble() : currentTemp + 2;
-            double tempMin = minTemps.has(i) ? minTemps.get(i).asDouble() : currentTemp - 4;
-            int rainProb = rainProbs.has(i) && !rainProbs.get(i).isNull() ? rainProbs.get(i).asInt() : 10;
-            int code = weatherCodes.has(i) ? weatherCodes.get(i).asInt() : currentCode;
+            JsonNode maxTemp = maxTemps.path(i);
+            JsonNode minTemp = minTemps.path(i);
+            JsonNode rainProbability = rainProbabilities.path(i);
+            JsonNode codeNode = weatherCodes.path(i);
+            if (!maxTemp.isNumber() || !minTemp.isNumber() || !codeNode.isNumber()) {
+                throw new WeatherUnavailableException("The weather provider returned incomplete daily forecast data.");
+            }
 
+            int code = codeNode.asInt();
+            int rainChance = rainProbability.isNumber() ? rainProbability.asInt() : 0;
             String condition = mapWeatherCodeToCondition(code);
-            String icon = mapWeatherCodeToIcon(code);
-
-            dailyForecasts.add(WeatherForecastResponse.DailyForecastDto.builder()
-                    .date(dateStr)
-                    .tempMax(Math.round(tempMax * 10.0) / 10.0)
-                    .tempMin(Math.round(tempMin * 10.0) / 10.0)
+            forecasts.add(WeatherForecastResponse.DailyForecastDto.builder()
+                    .date(date)
+                    .tempMax(round(maxTemp.asDouble()))
+                    .tempMin(round(minTemp.asDouble()))
                     .condition(condition)
-                    .rainProbability(rainProb)
-                    .icon(icon)
+                    .rainProbability(rainChance)
+                    .icon(mapWeatherCodeToIcon(code))
                     .build());
 
-            // Detect rain conflicts with outdoor activities in the trip itinerary
-            if (rainProb >= 60) {
-                String conflictActivity = findOutdoorActivityForDate(trip, dateStr);
+            if (rainChance >= 60) {
+                ItineraryDay itineraryDay = findItineraryDayForDate(itineraryDays, forecastDate);
+                String outdoorActivity = findOutdoorActivity(itineraryDay);
                 conflicts.add(WeatherForecastResponse.WeatherConflictDto.builder()
-                        .date(dateStr)
-                        .activityTitle(conflictActivity != null ? conflictActivity : "Outdoor Sightseeing & Exploration")
-                        .warningMessage("High rain probability (" + rainProb + "%) predicted. Rain condition: " + condition)
-                        .suggestedAlternative("Schedule indoor museum, cultural show, or cafe visit during peak rain hours.")
-                        .budgetImpact(150.0)
+                        .date(date)
+                        .activityTitle(outdoorActivity != null ? outdoorActivity : "Outdoor activities")
+                        .warningMessage("High rain probability (" + rainChance + "%) predicted. Rain condition: " + condition)
+                        .suggestedAlternative("Consider an indoor museum, cultural show, or cafe visit.")
+                        .budgetImpact(0.0)
+                        .itineraryDayId(itineraryDay != null ? itineraryDay.getId() : null)
                         .build());
             }
         }
 
-        return WeatherForecastResponse.builder()
-                .destination(destination)
-                .currentTemperature(Math.round(currentTemp * 10.0) / 10.0)
-                .currentCondition(mapWeatherCodeToCondition(currentCode))
-                .rainProbability(dailyForecasts.isEmpty() ? 10 : dailyForecasts.get(0).getRainProbability())
-                .windSpeed(Math.round(currentWind * 10.0) / 10.0)
-                .dailyForecasts(dailyForecasts)
-                .weatherConflicts(conflicts)
-                .build();
-    }
-
-    private WeatherForecastResponse fetchOpenWeatherMapForecast(String destination, Trip trip) throws Exception {
-        String cleanCity = destination.split(",")[0].trim();
-        String url = UriComponentsBuilder.fromHttpUrl("https://api.openweathermap.org/data/2.5/forecast")
-                .queryParam("q", cleanCity)
-                .queryParam("appid", weatherApiKey)
-                .queryParam("units", "metric")
-                .toUriString();
-
-        String json = restTemplate.getForObject(url, String.class);
-        JsonNode root = objectMapper.readTree(json);
-        JsonNode list = root.path("list");
-
-        if (!list.isArray() || list.isEmpty()) return null;
-
-        List<WeatherForecastResponse.DailyForecastDto> dailyForecasts = new ArrayList<>();
-        List<WeatherForecastResponse.WeatherConflictDto> conflicts = new ArrayList<>();
-
-        for (int i = 0; i < list.size(); i += 8) { // Sample daily (8 intervals of 3 hours = 24h)
-            JsonNode item = list.get(i);
-            String dtTxt = item.path("dt_txt").asText("").split(" ")[0];
-            JsonNode main = item.path("main");
-            double temp = main.path("temp").asDouble(25.0);
-            double tempMax = main.path("temp_max").asDouble(temp);
-            double tempMin = main.path("temp_min").asDouble(temp);
-            int rainProb = (int) Math.round(item.path("pop").asDouble(0.1) * 100);
-            
-            String condition = "Clear";
-            String icon = "sun";
-            JsonNode weatherArr = item.path("weather");
-            if (weatherArr.isArray() && !weatherArr.isEmpty()) {
-                condition = weatherArr.get(0).path("main").asText("Clear");
-                icon = mapOwmConditionToIcon(condition);
-            }
-
-            dailyForecasts.add(WeatherForecastResponse.DailyForecastDto.builder()
-                    .date(dtTxt)
-                    .tempMax(Math.round(tempMax * 10.0) / 10.0)
-                    .tempMin(Math.round(tempMin * 10.0) / 10.0)
-                    .condition(condition)
-                    .rainProbability(rainProb)
-                    .icon(icon)
-                    .build());
+        if (forecasts.isEmpty()) {
+            throw new WeatherUnavailableException("A reliable forecast is not available for this trip date range yet. Weather forecasts are currently available for the next 16 days.");
         }
 
-        JsonNode firstItem = list.get(0);
-        double curTemp = firstItem.path("main").path("temp").asDouble(25.0);
-        double curWind = firstItem.path("wind").path("speed").asDouble(10.0);
-
         return WeatherForecastResponse.builder()
                 .destination(destination)
-                .currentTemperature(Math.round(curTemp * 10.0) / 10.0)
-                .currentCondition(dailyForecasts.isEmpty() ? "Sunny" : dailyForecasts.get(0).getCondition())
-                .rainProbability(dailyForecasts.isEmpty() ? 10 : dailyForecasts.get(0).getRainProbability())
-                .windSpeed(Math.round(curWind * 10.0) / 10.0)
-                .dailyForecasts(dailyForecasts)
+                .currentTemperature(round(currentTempNode.asDouble()))
+                .currentCondition(mapWeatherCodeToCondition(currentCodeNode.asInt()))
+                .rainProbability(forecasts.get(0).getRainProbability())
+                .windSpeed(round(currentWindNode.asDouble()))
+                .dailyForecasts(forecasts)
                 .weatherConflicts(conflicts)
+                .forecastSource("Open-Meteo")
+                .forecastNote(range.note())
                 .build();
     }
 
-    private String findOutdoorActivityForDate(Trip trip, String dateStr) {
-        if (trip == null) return null;
-        List<ItineraryDay> days = itineraryDayRepository.findByTripIdOrderByDayNumberAsc(trip.getId());
+    private synchronized Coordinates resolveCoordinates(String destination) throws Exception {
+        String cacheKey = destination.trim().toLowerCase(Locale.ROOT);
+        Coordinates cached = GEOCODE_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        long waitMillis = GEOCODING_INTERVAL_MS - (System.currentTimeMillis() - lastGeocodingRequestAt);
+        if (waitMillis > 0) {
+            try {
+                Thread.sleep(waitMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new WeatherUnavailableException("Weather location lookup was interrupted. Please try again.", e);
+            }
+        }
+        lastGeocodingRequestAt = System.currentTimeMillis();
+
+        String geocodingUrl = UriComponentsBuilder.fromUriString("https://nominatim.openstreetmap.org/search")
+                .queryParam("q", destination)
+                .queryParam("format", "jsonv2")
+                .queryParam("limit", 1)
+                .toUriString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.USER_AGENT, "WanderPlan/1.0 (trip weather forecast)");
+        ResponseEntity<String> response = restTemplate.exchange(
+                geocodingUrl,
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                String.class);
+        JsonNode results = objectMapper.readTree(response.getBody());
+        if (!results.isArray() || results.isEmpty()) {
+            throw new BadRequestException("Could not find weather data for \"" + destination + "\". Check the trip destination spelling.");
+        }
+
+        JsonNode location = results.get(0);
+        JsonNode latitude = location.path("lat");
+        JsonNode longitude = location.path("lon");
+        if (latitude.isMissingNode() || longitude.isMissingNode()) {
+            throw new WeatherUnavailableException("The destination could not be matched to a weather location.");
+        }
+        double lat;
+        double lon;
+        try {
+            lat = Double.parseDouble(latitude.asText());
+            lon = Double.parseDouble(longitude.asText());
+        } catch (NumberFormatException e) {
+            throw new WeatherUnavailableException("The destination geocoder returned invalid coordinates.", e);
+        }
+        if (!Double.isFinite(lat) || !Double.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+            throw new WeatherUnavailableException("The destination geocoder returned coordinates outside valid bounds.");
+        }
+        Coordinates coordinates = new Coordinates(lat, lon);
+        if (GEOCODE_CACHE.size() >= 500) {
+            GEOCODE_CACHE.clear();
+        }
+        GEOCODE_CACHE.put(cacheKey, coordinates);
+        return coordinates;
+    }
+
+    private ForecastRange selectForecastRange(Trip trip, LocalDate today, LocalDate forecastEnd) {
+        LocalDate tripStart = trip.getStartDate();
+        LocalDate tripEnd = trip.getEndDate();
+        LocalDate rangeStart = today;
+        LocalDate rangeEnd = today.plusDays(6);
+        String note = "Forecast for the next 7 days.";
+
+        if (tripStart != null && !tripStart.isAfter(forecastEnd) && (tripEnd == null || !tripEnd.isBefore(today))) {
+            rangeStart = tripStart.isBefore(today) ? today : tripStart;
+            LocalDate requestedEnd = tripEnd == null ? rangeStart.plusDays(6) : tripEnd;
+            rangeEnd = requestedEnd.isAfter(forecastEnd) ? forecastEnd : requestedEnd;
+            if (requestedEnd.isAfter(forecastEnd)) {
+                note = "Showing the available forecast through " + forecastEnd + "; later trip dates are outside the 16-day forecast window.";
+            } else {
+                note = "Forecast matched to your trip dates.";
+            }
+        } else if (tripStart != null) {
+            note = "Your trip dates are outside the reliable 16-day forecast window. Showing the upcoming forecast instead.";
+        }
+
+        return new ForecastRange(rangeStart, rangeEnd, note);
+    }
+
+    private ItineraryDay findItineraryDayForDate(List<ItineraryDay> days, LocalDate date) {
         for (ItineraryDay day : days) {
-            if (day.getActivities() != null) {
-                for (ItineraryActivity act : day.getActivities()) {
-                    if (Boolean.TRUE.equals(act.getIsOutdoor())) {
-                        return act.getTitle();
-                    }
-                }
+            if (date.equals(day.getDate())) {
+                return day;
             }
         }
         return null;
+    }
+
+    private String findOutdoorActivity(ItineraryDay day) {
+        if (day == null || day.getActivities() == null) {
+            return null;
+        }
+        for (ItineraryActivity activity : day.getActivities()) {
+            if (Boolean.TRUE.equals(activity.getIsOutdoor())) {
+                return activity.getTitle();
+            }
+        }
+        return null;
+    }
+
+    private double round(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     private String mapWeatherCodeToCondition(int code) {
@@ -244,7 +291,7 @@ public class WeatherService {
             case 71, 73, 75 -> "Snow Fall";
             case 80, 81, 82 -> "Rain Showers";
             case 95, 96, 99 -> "Thunderstorm";
-            default -> "Clear Skies";
+            default -> "Unknown";
         };
     }
 
@@ -256,46 +303,10 @@ public class WeatherService {
             case 51, 53, 55, 61, 63, 65, 80, 81, 82 -> "cloud-rain";
             case 71, 73, 75 -> "snowflake";
             case 95, 96, 99 -> "cloud-lightning";
-            default -> "sun";
+            default -> "cloud";
         };
     }
 
-    private String mapOwmConditionToIcon(String condition) {
-        if (condition == null) return "sun";
-        String lower = condition.toLowerCase();
-        if (lower.contains("rain") || lower.contains("drizzle")) return "cloud-rain";
-        if (lower.contains("cloud")) return "cloud-sun";
-        if (lower.contains("thunder")) return "cloud-lightning";
-        if (lower.contains("snow")) return "snowflake";
-        return "sun";
-    }
-
-    private WeatherForecastResponse buildFallbackForecast(String destination, Trip trip) {
-        List<WeatherForecastResponse.DailyForecastDto> forecasts = new ArrayList<>();
-        LocalDate now = LocalDate.now();
-        for (int i = 0; i < 7; i++) {
-            forecasts.add(WeatherForecastResponse.DailyForecastDto.builder()
-                    .date(now.plusDays(i).toString())
-                    .tempMax(28.0)
-                    .tempMin(21.0)
-                    .condition("Pleasant & Clear")
-                    .rainProbability(15)
-                    .icon("sun")
-                    .build());
-        }
-
-        return WeatherForecastResponse.builder()
-                .destination(destination)
-                .currentTemperature(26.5)
-                .currentCondition("Clear")
-                .rainProbability(15)
-                .windSpeed(11.0)
-                .dailyForecasts(forecasts)
-                .weatherConflicts(new ArrayList<>())
-                .build();
-    }
-
-    public boolean isExternalApiConfigured() {
-        return weatherApiKey != null && !weatherApiKey.equals("NO_KEY") && !weatherApiKey.isBlank();
-    }
+    private record ForecastRange(LocalDate start, LocalDate end, String note) {}
+    private record Coordinates(double latitude, double longitude) {}
 }

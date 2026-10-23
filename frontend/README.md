@@ -28,7 +28,13 @@ This is the fully completed React frontend for the Travel & Budget Planner Syste
    - **Auto Itinerary**: Interactive timeline with weather conflict detection and warnings.
    - **Group Voting**: Collaborative polling with animated progress results.
    - **SplitSmart**: Expense splitting with a dispute resolution mechanism.
-   - **SOS Emergency**: 3-second hold safeguard for instant location sharing.
+   - **SOS Emergency**: 3-second hold safeguard, GPS sharing, trusted contacts, and trip alerts.
+
+### SOS Safety Center
+- Add, search, edit, and remove up to five trusted contacts. Contact numbers must include their country code (for example, `+919876543210`); contacts are stored in the database for the signed-in user and trip.
+- Holding SOS for three seconds requests the device's current GPS location and creates an SOS alert. Each trusted contact gets a button to open the device's SMS app with an emergency message and Google Maps link prefilled; the user must press Send.
+- Trip members receive in-app SOS and safe-status notifications. While SOS is active, GPS updates are sent to the backend until the user marks themselves safe.
+- No paid SMS gateway is required. Sending and delivery cannot be confirmed by the website, and normal carrier SMS charges may apply. The SMS app link requires a device/browser with an SMS handler.
 
 ## How to Run
 
@@ -43,4 +49,4 @@ This is the fully completed React frontend for the Travel & Budget Planner Syste
    ```
 
 3. View in the browser at `http://localhost:5173`. 
-*(Note: Use dummy data like `user@example.com` to log in since the backend is mocked).*
+*(Some frontend flows still use simulated data. SOS requires the Spring Boot backend, an authenticated trip, and browser location permission for GPS.)*

@@ -12,6 +12,7 @@ public class InvitationResponse {
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;
     private String acceptUrl;
+    private Boolean emailSent;
 
     public InvitationResponse() {}
 
@@ -54,6 +55,9 @@ public class InvitationResponse {
     public String getAcceptUrl() { return acceptUrl; }
     public void setAcceptUrl(String acceptUrl) { this.acceptUrl = acceptUrl; }
 
+    public Boolean getEmailSent() { return emailSent; }
+    public void setEmailSent(Boolean emailSent) { this.emailSent = emailSent; }
+
     public static InvitationResponseBuilder builder() {
         return new InvitationResponseBuilder();
     }
@@ -68,6 +72,7 @@ public class InvitationResponse {
         private LocalDateTime createdAt;
         private LocalDateTime expiresAt;
         private String acceptUrl;
+        private Boolean emailSent;
 
         public InvitationResponseBuilder id(Long id) { this.id = id; return this; }
         public InvitationResponseBuilder tripId(Long tripId) { this.tripId = tripId; return this; }
@@ -78,9 +83,12 @@ public class InvitationResponse {
         public InvitationResponseBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public InvitationResponseBuilder expiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; return this; }
         public InvitationResponseBuilder acceptUrl(String acceptUrl) { this.acceptUrl = acceptUrl; return this; }
+        public InvitationResponseBuilder emailSent(Boolean emailSent) { this.emailSent = emailSent; return this; }
 
         public InvitationResponse build() {
-            return new InvitationResponse(id, tripId, destination, invitedEmail, invitedByName, status, createdAt, expiresAt, acceptUrl);
+            InvitationResponse response = new InvitationResponse(id, tripId, destination, invitedEmail, invitedByName, status, createdAt, expiresAt, acceptUrl);
+            response.setEmailSent(emailSent);
+            return response;
         }
     }
 }

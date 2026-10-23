@@ -20,7 +20,7 @@ The **WanderPlan** backend is built with **Java 25**, **Spring Boot 3.5.3**, **S
  │  Spring Data JPA / DB │ External Services │
  └──────────┬────────────┴─────────┬─────────┘
             │                      │
-     MySQL / H2 Database           ├─► Open-Meteo & OpenWeatherMap (Weather)
+     MySQL / H2 Database           ├─► Open-Meteo (Forecast) & OpenStreetMap Nominatim (Geocoding)
                                    ├─► OpenStreetMap Nominatim/Overpass (Places)
                                    └─► OpenStreetMap & Amadeus (Hotels)
 ```
@@ -31,7 +31,7 @@ The **WanderPlan** backend is built with **Java 25**, **Spring Boot 3.5.3**, **S
 
 | API Module | Live Provider (Zero Key Required) | Commercial API Supported | Data Provided Live | Unindexed Fields (Returned as `null`) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Weather API** | **Open-Meteo** (Global Satellite Forecast) | **OpenWeatherMap** (`WEATHER_API_KEY`) | Real-time temp, wind speed, weather condition, 7-day daily max/min temperatures, precipitation probabilities, and rain conflict analysis. | None (100% full live coverage) |
+| **Weather API** | **Open-Meteo** (Forecast) + **OpenStreetMap Nominatim** (Destination geocoding) | None | Current conditions, trip-date daily max/min temperatures, precipitation probabilities, up to 16 forecast days, and rain-risk alerts matched to itinerary dates. | Forecasts beyond 16 days are not available yet; lookup failures return an explicit service error rather than sample weather. |
 | **Places API** | **OpenStreetMap** (Nominatim & Overpass) | **Geoapify Places** (`PLACES_API_KEY`) | Real attraction names, heritage landmarks, museums, and exact GPS coordinates (latitude/longitude) with Google Maps routing. | `rating: null`, `estimatedCost: null` (unless indexed in OSM tags) |
 | **Hotels API** | **OpenStreetMap** (Accommodations Directory) | **Amadeus Hotel API** (`AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET`) | Real hotel names, city locations, types (Hotels, Resorts, Hostels). | `pricePerNight: null`, `availabilityStatus: "CHECK_ONLINE"` (requires Amadeus credentials) |
 
@@ -45,8 +45,6 @@ All API keys are stored strictly on the backend and are **never exposed to the R
 # backend/src/main/resources/application.yml
 app:
   external:
-    weather:
-      api-key: ${WEATHER_API_KEY:NO_KEY}
     places:
       api-key: ${PLACES_API_KEY:NO_KEY}
     hotels:
@@ -58,19 +56,21 @@ app:
 ### To supply your custom keys (Optional):
 ```powershell
 # In PowerShell before running Spring Boot:
-$env:WEATHER_API_KEY="your_openweathermap_api_key"
 $env:PLACES_API_KEY="your_geoapify_key"
 $env:AMADEUS_CLIENT_ID="your_amadeus_client_id"
 $env:AMADEUS_CLIENT_SECRET="your_amadeus_client_secret"
+$env:FRONTEND_URL="https://your-deployed-app.example"
 mvn spring-boot:run
 ```
+`FRONTEND_URL` defaults to the deployed WanderPlan frontend and is used for shareable invitation links. No SMTP setup is needed for this flow. Generate and share invites from the deployed app so the invitation token is stored in the same public backend database that your friend's browser uses.
+SOS does not use a paid SMS gateway. It prepares an SMS message on the device; the user must open their SMS app and press Send. Normal mobile-carrier SMS charges may apply. The database records the contact and that manual confirmation is pending; the application cannot verify whether the user ultimately sent the message or whether it was delivered.
 
 ---
 
 ## 4. Complete REST API Catalog
 
 ### 🌤️ Weather, Places & Hotels
-- `GET /api/trips/{tripId}/weather` — Live 7-day weather forecast, rain probability, outdoor conflict detection.
+- `GET /api/trips/{tripId}/weather` — Live Open-Meteo forecast for the destination and trip dates (up to 16 days), with rain-risk warnings matched against same-day itinerary activities. Destination coordinates are resolved through OpenStreetMap Nominatim; no weather API key is required.
 - `GET /api/trips/{tripId}/places` — Live attractions and landmarks with GPS coordinates from OpenStreetMap.
 - `GET /api/trips/{tripId}/hotels` — Live accommodation listings with online booking links.
 
@@ -83,11 +83,12 @@ mvn spring-boot:run
 - `POST /api/trips` — Create trip (`isTripAdmin` assigned)
 - `GET /api/trips` — List user's trips
 - `GET /api/trips/{tripId}` — Trip overview
-- `POST /api/trips/{tripId}/invitations` — Send email invitation (Admin only)
+- `POST /api/trips/{tripId}/invitations/link` — Create or retrieve a shareable trip invite link (Admin only; link holders can join after signing in)
+- `POST /api/trips/{tripId}/invitations/{invitationId}/link` — Replace an expired or cancelled invite with a new shareable link (Admin only)
 - `GET /api/trips/{tripId}/invitations` — View pending invitations (Admin only)
 - `DELETE /api/trips/{tripId}/invitations/{id}` — Cancel invitation
 - `GET /api/invitations/verify?token={token}` — Verify an invitation token
-- `POST /api/invitations/accept?token={token}` — Accept invitation (Strict email match)
+- `POST /api/invitations/accept?token={token}` — Accept invitation (email match for legacy email-targeted invites; link invitations accept the authenticated account)
 - `POST /api/invitations/decline?token={token}` — Decline invitation
 
 ### 💰 Budget, Simulator & Rescue
@@ -105,6 +106,15 @@ mvn spring-boot:run
 - `GET /api/trips/{tripId}/itinerary` — Day-by-day itinerary
 - `POST /api/trips/{tripId}/itinerary/generate` — Auto schedule
 - `GET /api/trips/{tripId}/polls` — Group voting polls
+- `GET /api/trips/{tripId}/sos/contacts` — List the signed-in user's saved emergency contacts for this trip
+- `POST /api/trips/{tripId}/sos/contacts` — Save an emergency contact to the database
+- `PUT /api/trips/{tripId}/sos/contacts/{contactId}` — Update a saved emergency contact
+- `DELETE /api/trips/{tripId}/sos/contacts/{contactId}` — Delete a saved emergency contact
 - `POST /api/trips/{tripId}/sos` — Broadcast emergency alert
+- `GET /api/trips/{tripId}/sos` — List trip SOS alerts, including saved SMS delivery results
+- `PUT /api/trips/{tripId}/sos/{sosId}/location` — Save an active SOS location update
+- `POST /api/trips/{tripId}/sos/{sosId}/safe` — Mark the SOS as safe
 - `POST /api/surprise-me` — AI destination recommendation
 - `GET /api/notifications` — Notification feed
+
+Emergency contacts are stored in `sos_contacts` and scoped to both their owner and trip. SOS events and their initial/current coordinates are stored in `sos_alerts`. Each SMS recipient, phone-number snapshot, and manual-send status is stored in `sos_deliveries` so the record remains available even if a contact is later edited or deleted. The SOS API uses only contacts saved in the database; contact details are not accepted from the trigger request.

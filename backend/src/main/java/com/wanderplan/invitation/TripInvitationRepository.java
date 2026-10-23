@@ -15,6 +15,8 @@ public interface TripInvitationRepository extends JpaRepository<TripInvitation, 
 
     Optional<TripInvitation> findByTripIdAndInvitedEmailAndStatus(Long tripId, String invitedEmail, InvitationStatus status);
 
+    Optional<TripInvitation> findByTripIdAndInvitedEmailIsNullAndStatus(Long tripId, InvitationStatus status);
+
     boolean existsByTripIdAndInvitedEmailAndStatus(Long tripId, String invitedEmail, InvitationStatus status);
 
     List<TripInvitation> findByInvitedEmailAndStatus(String invitedEmail, InvitationStatus status);

@@ -2,7 +2,7 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, PlaneTakeoff } from 'lucide-react';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -11,6 +11,7 @@ import Card from '../../components/common/Card';
 import { tripService } from '../../services/tripService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { TRAVEL_MOODS } from '../../constants/travelMoods';
 
 const schema = z.object({
   destination: z.string().min(2, "Destination is required"),
@@ -24,11 +25,16 @@ const schema = z.object({
 
 export default function CreateTrip() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const setupDestination = searchParams.get('destination')?.trim() || '';
+  const setupInterests = searchParams.getAll('interest')
+    .filter(interest => TRAVEL_MOODS.some(mood => mood.id === interest));
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
+      destination: setupDestination,
       travelers: 2,
       travelMode: 'flight'
     }
@@ -36,9 +42,9 @@ export default function CreateTrip() {
 
   const onSubmit = async (data) => {
     try {
-      const newTrip = await tripService.createTrip(data, user?.id, user?.name);
+      const newTrip = await tripService.createTrip({ ...data, interests: setupInterests }, user?.id, user?.name);
       addToast('success', 'Trip created successfully!');
-      navigate(`/trips/${newTrip.id}/overview`);
+      navigate(setupDestination ? `/trips/${newTrip.id}/places` : `/trips/${newTrip.id}/overview`);
     } catch (error) {
       addToast('error', 'Failed to create trip');
     }
@@ -59,6 +65,11 @@ export default function CreateTrip() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight font-display text-charcoal">Start Your Adventure</h1>
             <p className="text-muted mt-1">Where are you heading? Let's get the basics down.</p>
+            {setupDestination && (
+              <p className="mt-3 max-w-xl text-sm text-teal">
+                Your destination and selected moods will be saved with this trip. Places will be loaded from mapped regional listings.
+              </p>
+            )}
           </div>
         </div>
 
@@ -150,4 +161,3 @@ export default function CreateTrip() {
     </PageTransition>
   );
 }
-

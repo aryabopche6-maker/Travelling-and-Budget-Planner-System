@@ -2,6 +2,9 @@ package com.wanderplan.hotel;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wanderplan.exception.BadRequestException;
+import com.wanderplan.exception.ExternalServiceUnavailableException;
+import com.wanderplan.exception.ResourceNotFoundException;
 import com.wanderplan.preference.Preference;
 import com.wanderplan.preference.PreferenceRepository;
 import com.wanderplan.trip.Trip;
@@ -106,24 +109,31 @@ public class HotelService {
     public List<HotelResponse> getHotelsForTrip(Long tripId, Long userId, String location, int radius) {
         tripService.validateTripMembership(tripId, userId);
 
-        Trip trip = tripRepository.findById(tripId).orElse(null);
-        String destination = trip != null && trip.getDestination() != null && !trip.getDestination().isBlank()
-                ? trip.getDestination().trim()
-                : "Goa";
-
-        List<String> interests = new ArrayList<>();
-        if (trip != null) {
-            List<Preference> prefs = preferenceRepository.findByTripId(trip.getId());
-            interests = prefs.stream().map(Preference::getName).collect(Collectors.toList());
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
+        String destination = trip.getDestination().trim();
+        if (radius < 1 || radius > 35) {
+            throw new BadRequestException("Search radius must be between 1 and 35 km");
+        }
+        if (location != null && location.trim().length() > 120) {
+            throw new BadRequestException("Search area must be 120 characters or fewer");
         }
 
-        String searchArea = (location != null && !location.trim().isEmpty()) ? location.trim() : destination;
+        List<String> interests = preferenceRepository.findByTripId(trip.getId()).stream()
+                .map(Preference::getName)
+                .collect(Collectors.toList());
 
-        // 1. Try Amadeus Live Hotel API if credentials are provided
-        if (isAmadeusConfigured()) {
+        String searchArea = (location != null && !location.trim().isEmpty()) ? location.trim() : destination;
+        double[] coords = resolveCoordinates(searchArea, destination);
+        if (coords == null) {
+            throw new BadRequestException("Could not locate that area. Add the city or state and try again.");
+        }
+
+        // The Amadeus by-city endpoint is only appropriate for the trip destination.
+        if (searchArea.equalsIgnoreCase(destination) && isAmadeusConfigured()) {
             try {
-                List<HotelResponse> amadeusHotels = fetchAmadeusHotels(searchArea, radius, interests, trip);
-                if (amadeusHotels != null && amadeusHotels.size() >= 5) {
+                List<HotelResponse> amadeusHotels = fetchAmadeusHotels(searchArea, radius, coords[0], coords[1], interests, trip);
+                if (amadeusHotels != null && !amadeusHotels.isEmpty()) {
                     return prioritizeHotels(amadeusHotels, interests, trip);
                 }
             } catch (Exception e) {
@@ -131,27 +141,14 @@ public class HotelService {
             }
         }
 
-        // 2. Primary Live Open Provider: OpenStreetMap Accommodations
-        try {
-            List<HotelResponse> osmHotels = fetchOsmHotels(searchArea, destination, radius, interests, trip);
-            if (osmHotels != null && !osmHotels.isEmpty()) {
-                return prioritizeHotels(osmHotels, interests, trip);
-            }
-        } catch (Exception e) {
-            log.error("Failed to fetch live hotels from OSM for area {}: {}", searchArea, e.getMessage());
-        }
-
-        return prioritizeHotels(buildFallbackHotels(searchArea, destination, 15.2993, 74.1240, interests, trip), interests, trip);
+        List<HotelResponse> osmHotels = fetchOsmHotels(searchArea, destination, coords[0], coords[1], radius, interests, trip);
+        return prioritizeHotels(osmHotels, interests, trip);
     }
 
-    private List<HotelResponse> fetchOsmHotels(String searchArea, String destination, int radiusKm, List<String> interests, Trip trip) {
+    private List<HotelResponse> fetchOsmHotels(String searchArea, String destination, double lat, double lon, int radiusKm, List<String> interests, Trip trip) {
         List<HotelResponse> hotels = new ArrayList<>();
-
-        double[] coords = resolveCoordinates(searchArea, destination);
-        double lat = coords != null ? coords[0] : 15.2993;
-        double lon = coords != null ? coords[1] : 74.1240;
-
-        int radiusMeters = Math.max(radiusKm * 1000, 5000);
+        boolean providerResponded = false;
+        int radiusMeters = radiusKm * 1000;
 
         try {
             String overpassQuery = String.format(
@@ -174,69 +171,68 @@ public class HotelService {
             HttpEntity<String> overpassEntity = new HttpEntity<>("data=" + URLEncoder.encode(overpassQuery, StandardCharsets.UTF_8), overpassHeaders);
             String overpassJson = restTemplate.postForObject(overpassUrl, overpassEntity, String.class);
 
-            if (overpassJson != null && !overpassJson.isBlank()) {
-                JsonNode overpassRoot = objectMapper.readTree(overpassJson);
-                JsonNode elements = overpassRoot.path("elements");
-                if (elements.isArray()) {
-                    int wikiLookups = 0;
-                    for (JsonNode elem : elements) {
-                        if (hotels.size() >= 30) break;
-                        JsonNode tags = elem.path("tags");
-                        String name = tags.path("name:en").asText(tags.path("name").asText(""));
-                        if (name.isBlank()) continue;
+            if (overpassJson == null || overpassJson.isBlank()) {
+                throw new IllegalStateException("Overpass returned an empty response");
+            }
+            JsonNode overpassRoot = objectMapper.readTree(overpassJson);
+            JsonNode elements = overpassRoot.path("elements");
+            if (!elements.isArray()) {
+                throw new IllegalStateException("Overpass returned an invalid stays response");
+            }
+            providerResponded = true;
+            for (JsonNode elem : elements) {
+                if (hotels.size() >= 30) break;
+                JsonNode tags = elem.path("tags");
+                String name = tags.path("name:en").asText(tags.path("name").asText(""));
+                if (name.isBlank()) continue;
 
-                        boolean exists = hotels.stream().anyMatch(h -> h.getName().equalsIgnoreCase(name));
-                        if (exists) continue;
+                boolean exists = hotels.stream().anyMatch(h -> h.getName().equalsIgnoreCase(name));
+                if (exists) continue;
 
-                        double hotelLat = elem.path("lat").asDouble(elem.path("center").path("lat").asDouble(lat));
-                        double hotelLon = elem.path("lon").asDouble(elem.path("center").path("lon").asDouble(lon));
+                double hotelLat = elem.path("lat").asDouble(elem.path("center").path("lat").asDouble(Double.NaN));
+                double hotelLon = elem.path("lon").asDouble(elem.path("center").path("lon").asDouble(Double.NaN));
+                if (!Double.isFinite(hotelLat) || !Double.isFinite(hotelLon)
+                        || hotelLat < -90 || hotelLat > 90 || hotelLon < -180 || hotelLon > 180) continue;
 
-                        Double stars = tags.has("stars") ? tags.path("stars").asDouble() : (4.0 + (Math.abs(name.hashCode() % 10) / 10.0));
-                        String hotelType = deriveHotelType(tags, name);
-                        Double price = deriveEstimatedPrice(trip != null ? trip.getTravelStyle() : "Moderate", hotelType, stars);
+                double distance = haversineKm(lat, lon, hotelLat, hotelLon);
+                if (distance > radiusKm) continue;
 
-                        String imgUrl = resolveHotelImage(tags, name, hotelType, searchArea);
+                Double stars = parseRating(tags);
+                String hotelType = deriveHotelType(tags, name);
 
-                        hotels.add(HotelResponse.builder()
-                                .id("osm-op-" + elem.path("id").asText())
-                                .name(name)
-                                .imageUrl(imgUrl)
-                                .rating(stars)
-                                .location(searchArea + (searchArea.equalsIgnoreCase(destination) ? "" : ", " + destination))
-                                .pricePerNight(price)
-                                .currency("INR")
-                                .amenities(deriveAmenities(tags, hotelType))
-                                .availabilityStatus("AVAILABLE")
-                                .hotelType(hotelType)
-                                .latitude(hotelLat)
-                                .longitude(hotelLon)
-                                .build());
-                    }
-                }
+                String imgUrl = resolveHotelImage(tags, name, hotelType, searchArea);
+
+                hotels.add(HotelResponse.builder()
+                        .id("osm-op-" + elem.path("id").asText())
+                        .name(name)
+                        .imageUrl(imgUrl)
+                        .rating(stars)
+                        .location(formatHotelLocation(tags, searchArea))
+                        .pricePerNight(null)
+                        .currency(null)
+                        .amenities(deriveAmenities(tags, hotelType))
+                        .availabilityStatus("UNKNOWN")
+                        .hotelType(hotelType)
+                        .latitude(hotelLat)
+                        .longitude(hotelLon)
+                        .build());
             }
         } catch (Exception e) {
             log.warn("Overpass hotel query timed out or failed: {}", e.getMessage());
         }
 
         // Secondary fallback: Nominatim live accommodation query
-        if (hotels.size() < 6) {
+        if (hotels.isEmpty()) {
             try {
-                fetchNominatimHotels(hotels, searchArea, destination, trip);
+                providerResponded |= fetchNominatimHotels(hotels, searchArea, destination, lat, lon, radiusKm);
             } catch (Exception e) {
                 log.warn("Nominatim hotel fallback failed: {}", e.getMessage());
             }
         }
 
-        // Guarantee at least 8+ stays for any searched locality
-        if (hotels.size() < 6) {
-            List<HotelResponse> fallbacks = buildFallbackHotels(searchArea, destination, lat, lon, interests, trip);
-            for (HotelResponse fb : fallbacks) {
-                if (hotels.stream().noneMatch(h -> h.getName().equalsIgnoreCase(fb.getName()))) {
-                    hotels.add(fb);
-                }
-            }
+        if (!providerResponded) {
+            throw new ExternalServiceUnavailableException("Map stay listings are temporarily unavailable. Please try again shortly.");
         }
-
         return hotels;
     }
 
@@ -253,17 +249,14 @@ public class HotelService {
         if (coords == null) {
             coords = geocodeLocation(searchArea);
         }
-        if (coords == null && !searchArea.equalsIgnoreCase(destination)) {
-            coords = geocodeLocation(destination);
-        }
-
         if (coords != null) {
             HOTEL_GEO_CACHE.put(cacheKey, coords);
         }
         return coords;
     }
 
-    private void fetchNominatimHotels(List<HotelResponse> hotels, String searchArea, String destination, Trip trip) {
+    private boolean fetchNominatimHotels(List<HotelResponse> hotels, String searchArea, String destination, double centerLat, double centerLon, int radiusKm) {
+        boolean providerResponded = false;
         String[] queries = new String[]{
             "hotels in " + searchArea + " " + destination,
             "resorts in " + searchArea,
@@ -279,38 +272,61 @@ public class HotelService {
                 String geoJson = restTemplate.exchange(nomUrl, HttpMethod.GET, new HttpEntity<>(headers), String.class).getBody();
                 JsonNode root = objectMapper.readTree(geoJson);
                 if (root.isArray()) {
+                    providerResponded = true;
                     for (JsonNode item : root) {
                         String name = item.path("name").asText(item.path("display_name").asText("").split(",")[0]);
                         if (name.isBlank() || name.length() > 60) continue;
+                        String type = item.path("type").asText("").toLowerCase(Locale.ROOT);
+                        String objectClass = item.path("class").asText("").toLowerCase(Locale.ROOT);
+                        if (!objectClass.equals("tourism")
+                                || !Set.of("hotel", "motel", "guest_house", "hostel", "resort", "apartment", "chalet")
+                                        .contains(type)) continue;
                         boolean exists = hotels.stream().anyMatch(h -> h.getName().equalsIgnoreCase(name));
                         if (exists) continue;
 
-                        double lat = item.path("lat").asDouble(0.0);
-                        double lon = item.path("lon").asDouble(0.0);
-                        double rating = 4.2 + (Math.abs(name.hashCode() % 8) / 10.0);
-                        String hotelType = name.toLowerCase().contains("resort") ? "Resort" : (name.toLowerCase().contains("hostel") ? "Hostel" : "Hotel");
+                        double lat = item.path("lat").asDouble(Double.NaN);
+                        double lon = item.path("lon").asDouble(Double.NaN);
+                        if (!Double.isFinite(lat) || !Double.isFinite(lon)
+                                || lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+                        if (lat == 0.0 && lon == 0.0 || haversineKm(centerLat, centerLon, lat, lon) > radiusKm) continue;
+                        String hotelType = type.equals("guest_house") ? "Guest House"
+                                : type.substring(0, 1).toUpperCase(Locale.ROOT) + type.substring(1).replace('_', ' ');
 
                         hotels.add(HotelResponse.builder()
                                 .id("nom-h-" + item.path("place_id").asText())
                                 .name(name)
-                                .imageUrl(resolveHotelImage(null, name, hotelType, searchArea))
-                                .rating(rating)
-                                .location(searchArea + (searchArea.equalsIgnoreCase(destination) ? "" : ", " + destination))
-                                .pricePerNight(deriveEstimatedPrice(trip != null ? trip.getTravelStyle() : "Moderate", hotelType, rating))
-                                .currency("INR")
-                                .amenities(Arrays.asList("Free WiFi", "Breakfast Included", "Air Conditioned"))
-                                .availabilityStatus("AVAILABLE")
+                                .rating(null)
+                                .location(item.path("display_name").asText(searchArea))
+                                .pricePerNight(null)
+                                .currency(null)
+                                .amenities(List.of())
+                                .availabilityStatus("UNKNOWN")
                                 .hotelType(hotelType)
                                 .latitude(lat)
                                 .longitude(lon)
                                 .build());
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                log.warn("Nominatim hotel lookup failed for query {}: {}", q, e.getMessage());
+            }
+            if (!hotels.isEmpty()) break;
+        }
+        return providerResponded;
+    }
+
+    private Double parseRating(JsonNode tags) {
+        String value = tags.path("stars").asText("");
+        if (value.isBlank()) return null;
+        try {
+            double rating = Double.parseDouble(value);
+            return rating >= 0 && rating <= 5 ? rating : null;
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 
-    private List<HotelResponse> fetchAmadeusHotels(String destination, int radiusKm, List<String> interests, Trip trip) throws Exception {
+    private List<HotelResponse> fetchAmadeusHotels(String destination, int radiusKm, double centerLat, double centerLon, List<String> interests, Trip trip) throws Exception {
         String token = getAmadeusToken();
         if (token == null) return null;
 
@@ -337,23 +353,24 @@ public class HotelService {
         for (JsonNode hotelNode : data) {
             if (count++ >= 20) break;
             String hotelId = hotelNode.path("hotelId").asText();
-            String name = hotelNode.path("name").asText("Grand " + cleanCity + " Hotel");
+            String name = hotelNode.path("name").asText("");
+            if (name.isBlank()) continue;
             JsonNode geoCode = hotelNode.path("geoCode");
             double lat = geoCode.path("latitude").asDouble(0.0);
             double lon = geoCode.path("longitude").asDouble(0.0);
+            if ((lat == 0.0 && lon == 0.0) || haversineKm(centerLat, centerLon, lat, lon) > radiusKm) continue;
 
             String hotelType = name.toLowerCase().contains("resort") ? "Resort" : "Hotel";
 
             hotels.add(HotelResponse.builder()
                     .id(hotelId)
                     .name(name)
-                    .imageUrl(resolveHotelImage(null, name, hotelType, cleanCity))
-                    .rating(4.4)
+                    .rating(null)
                     .location(cleanCity)
-                    .pricePerNight(deriveEstimatedPrice(trip != null ? trip.getTravelStyle() : "Moderate", hotelType, 4.4))
-                    .currency("INR")
-                    .amenities(Arrays.asList("High-Speed WiFi", "Swimming Pool", "Spa & Wellness", "Buffet Breakfast"))
-                    .availabilityStatus("AVAILABLE")
+                    .pricePerNight(null)
+                    .currency(null)
+                    .amenities(List.of())
+                    .availabilityStatus("UNKNOWN")
                     .hotelType(hotelType)
                     .latitude(lat)
                     .longitude(lon)
@@ -439,20 +456,37 @@ public class HotelService {
     }
 
     private List<String> deriveAmenities(JsonNode tags, String hotelType) {
-        List<String> amenities = new ArrayList<>(Arrays.asList("Free High-Speed WiFi", "Air Conditioned"));
-        if ("Resort".equalsIgnoreCase(hotelType) || "Luxury Hotel".equalsIgnoreCase(hotelType)) {
-            amenities.add("Infinity Swimming Pool");
-            amenities.add("Multi-Cuisine Buffet");
-            amenities.add("Luxury Spa & Wellness");
-        } else if ("Hostel".equalsIgnoreCase(hotelType)) {
-            amenities.add("Common Social Lounge");
-            amenities.add("Secure Lockers");
-            amenities.add("Community Events");
-        } else {
-            amenities.add("Complimentary Breakfast");
-            amenities.add("24/7 Room Service");
-        }
+        if (tags == null) return List.of();
+        List<String> amenities = new ArrayList<>();
+        if (tags.path("internet_access").asText("").equalsIgnoreCase("wlan")
+                || tags.path("internet_access").asText("").equalsIgnoreCase("yes")) amenities.add("Wi-Fi");
+        if (tags.path("air_conditioning").asText("").equalsIgnoreCase("yes")) amenities.add("Air conditioning");
+        if (tags.path("swimming_pool").asText("").equalsIgnoreCase("yes")) amenities.add("Swimming pool");
+        if (tags.path("restaurant").asText("").equalsIgnoreCase("yes")) amenities.add("Restaurant");
+        if (tags.path("sauna").asText("").equalsIgnoreCase("yes")) amenities.add("Sauna");
+        if (tags.path("parking").asText("").equalsIgnoreCase("yes")) amenities.add("Parking");
+        if (tags.path("wheelchair").asText("").equalsIgnoreCase("yes")) amenities.add("Wheelchair access");
+        if (tags.path("breakfast").asText("").equalsIgnoreCase("yes")) amenities.add("Breakfast");
         return amenities;
+    }
+
+    private String formatHotelLocation(JsonNode tags, String fallback) {
+        List<String> addressParts = new ArrayList<>();
+        for (String key : List.of("addr:street", "addr:suburb", "addr:city")) {
+            String value = tags.path(key).asText("").trim();
+            if (!value.isBlank() && !addressParts.contains(value)) addressParts.add(value);
+        }
+        return addressParts.isEmpty() ? fallback : String.join(", ", addressParts);
+    }
+
+    private double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        double earthRadiusKm = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     // Real verified hotels in Goa that exist on Google Maps
@@ -679,22 +713,7 @@ public class HotelService {
             }
         }
 
-        // 2. REAL photo from Wikipedia/Wikimedia Commons (FREE)
-        String wikiImg = fetchWikipediaImageFast(name);
-        if (wikiImg != null) {
-            return wikiImg;
-        }
-
-        // 3. Try with location appended for better accuracy
-        if (location != null && !location.isBlank()) {
-            String wikiImgLoc = fetchWikipediaImageFast(name + " " + location);
-            if (wikiImgLoc != null) {
-                return wikiImgLoc;
-            }
-        }
-
-        // 4. Fallback to curated hotel type images
-        return getHotelFallbackImage(hotelType, (name != null ? name : "") + "_" + (location != null ? location : ""));
+        return null;
     }
 
     public String getHotelFallbackImage(String hotelType, String seed) {

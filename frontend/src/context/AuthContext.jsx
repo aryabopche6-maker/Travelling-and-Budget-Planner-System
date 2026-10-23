@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     await authService.logout();
+    window.dispatchEvent(new Event('sos-user-logout'));
     setUser(null);
   };
 

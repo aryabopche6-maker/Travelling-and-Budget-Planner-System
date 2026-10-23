@@ -96,22 +96,24 @@ public class PollService {
             throw new BadRequestException("This poll has been locked by the admin. Voting is closed.");
         }
 
-        if (voteRepository.existsByPollIdAndUserId(pollId, userId)) {
-            throw new BadRequestException("You have already voted in this poll!");
-        }
-
         PollOption option = poll.getOptions().stream()
                 .filter(o -> o.getId().equals(request.getOptionId()))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Option not found in this poll"));
 
-        Vote vote = Vote.builder()
-                .poll(poll)
-                .option(option)
-                .userId(userId)
-                .build();
-
-        voteRepository.save(vote);
+        Optional<Vote> existingVoteOpt = voteRepository.findByPollIdAndUserId(pollId, userId);
+        if (existingVoteOpt.isPresent()) {
+            Vote existingVote = existingVoteOpt.get();
+            existingVote.setOption(option);
+            voteRepository.save(existingVote);
+        } else {
+            Vote vote = Vote.builder()
+                    .poll(poll)
+                    .option(option)
+                    .userId(userId)
+                    .build();
+            voteRepository.save(vote);
+        }
 
         // Log activity
         User user = userRepository.findById(userId).orElse(null);

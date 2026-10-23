@@ -19,7 +19,7 @@ public class TripInvitation {
     @JoinColumn(name = "trip_id", nullable = false)
     private Trip trip;
 
-    @Column(nullable = false)
+    @Column
     private String invitedEmail;
 
     @ManyToOne(fetch = FetchType.LAZY)

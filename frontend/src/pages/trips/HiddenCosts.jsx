@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldAlert, AlertCircle, CheckCircle2, Plus, ArrowRight, Lightbulb, Check, Wallet } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Plus, ArrowRight, Lightbulb, Wallet, Plane, Building, Utensils, HeartPulse } from 'lucide-react';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -42,6 +42,41 @@ const hiddenCostCatalog = [
     ]
   }
 ];
+
+const categoryStyles = {
+  transport: {
+    icon: Plane,
+    iconClass: 'bg-sky-100 text-sky-700',
+    borderClass: 'border-sky-200',
+    selectedClass: 'bg-sky-50 border-sky-400 shadow-sky-100',
+    selectedTextClass: 'text-sky-800',
+    selectedCheckClass: 'border-sky-600 bg-sky-600'
+  },
+  accommodation: {
+    icon: Building,
+    iconClass: 'bg-teal-100 text-teal-700',
+    borderClass: 'border-teal-200',
+    selectedClass: 'bg-teal-50 border-teal-400 shadow-teal-100',
+    selectedTextClass: 'text-teal-800',
+    selectedCheckClass: 'border-teal-700 bg-teal-700'
+  },
+  food: {
+    icon: Utensils,
+    iconClass: 'bg-orange-100 text-orange-700',
+    borderClass: 'border-orange-200',
+    selectedClass: 'bg-orange-50 border-orange-400 shadow-orange-100',
+    selectedTextClass: 'text-orange-800',
+    selectedCheckClass: 'border-orange-600 bg-orange-600'
+  },
+  contingency: {
+    icon: HeartPulse,
+    iconClass: 'bg-rose-100 text-rose-700',
+    borderClass: 'border-rose-200',
+    selectedClass: 'bg-rose-50 border-rose-400 shadow-rose-100',
+    selectedTextClass: 'text-rose-800',
+    selectedCheckClass: 'border-rose-600 bg-rose-600'
+  }
+};
 
 export default function HiddenCosts() {
   const { trip } = useTrip();
@@ -120,25 +155,46 @@ export default function HiddenCosts() {
 
   return (
     <PageTransition variant="slideUp" className="max-w-5xl mx-auto space-y-8 pb-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-muted/30 pb-6">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
+        className="relative flex flex-col md:flex-row md:items-end justify-between gap-4 overflow-hidden rounded-3xl border border-coral/15 bg-gradient-to-br from-[#F8F3E8] via-[#F2F7F1] to-[#EAF6F3] p-6 shadow-travel-md md:p-7"
+      >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-coral/10 text-coral rounded-xl flex items-center justify-center shrink-0 border border-coral/20 shadow-inner">
+          <motion.div
+            whileHover={{ rotate: -8, scale: 1.08 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 16 }}
+            className="w-12 h-12 bg-coral/10 text-coral rounded-xl flex items-center justify-center shrink-0 border border-coral/20 shadow-inner"
+          >
             <ShieldAlert className="w-6 h-6" />
-          </div>
+          </motion.div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-charcoal">Hidden Costs Scanner</h1>
             <p className="text-secondary mt-1">We've identified potential unexpected expenses for your {trip?.destination} trip.</p>
           </div>
         </div>
         
-        <div className="bg-bg p-4 rounded-xl border border-muted/30 text-right min-w-[200px]">
+        <motion.div
+          whileHover={{ y: -3, scale: 1.02 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 20 }}
+          className="bg-[#FFFCF4]/90 p-4 rounded-xl border border-coral/20 text-right min-w-[200px] shadow-sm"
+        >
           <p className="text-sm text-secondary font-medium">Selected Hidden Buffer</p>
           <p className="text-2xl font-bold text-coral tracking-tight">₹{totalAdded.toLocaleString()}</p>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
-      <div className="bg-teal/10 border border-teal/20 rounded-2xl p-5 flex items-start gap-4 shadow-inner">
-        <Lightbulb className="w-6 h-6 text-teal shrink-0 mt-0.5" />
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.35 }}
+        whileHover={{ y: -2 }}
+        className="bg-gradient-to-r from-[#E8F4EF] to-[#F5F2E8] border border-teal/20 rounded-2xl p-5 flex items-start gap-4 shadow-sm transition-shadow hover:shadow-travel"
+      >
+        <motion.div whileHover={{ rotate: 12, scale: 1.1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
+          <Lightbulb className="w-6 h-6 text-teal shrink-0 mt-0.5" />
+        </motion.div>
         <div className="flex-1">
           <h4 className="font-bold text-teal mb-1">Why is this important?</h4>
           <p className="text-sm text-secondary leading-relaxed">
@@ -146,54 +202,80 @@ export default function HiddenCosts() {
             Select the buffers below and click <strong>Apply to Budget</strong> to include them in your <strong>Trip Budget Overview</strong> and total calculations.
           </p>
         </div>
-      </div>
+      </motion.div>
 
       {successMessage && (
-        <div className="bg-teal/15 border border-teal/30 text-teal p-4 rounded-xl flex items-center gap-3 font-medium">
+        <motion.div
+          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="bg-teal/15 border border-teal/30 text-teal p-4 rounded-xl flex items-center gap-3 font-medium"
+        >
           <CheckCircle2 className="w-5 h-5 text-teal" />
           <span>{successMessage}</span>
-        </div>
+        </motion.div>
       )}
 
       <div className="grid grid-cols-1 gap-6">
-        {hiddenCostCatalog.map((category, index) => (
-          <Card key={category.id} delay={index * 0.1} className="p-6 bg-white border-muted/30 shadow-sm">
-            <h3 className="text-xl font-bold text-charcoal mb-6 tracking-tight">{category.title}</h3>
+        {hiddenCostCatalog.map((category, index) => {
+          const theme = categoryStyles[category.id];
+          const CategoryIcon = theme.icon;
+          return (
+            <Card
+              key={category.id}
+              delay={index * 0.1}
+              hoverLift
+              gradientBorder
+              whileHover={{ y: -3 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="p-6 !bg-[#F3F7F3] border-muted/30 shadow-sm"
+            >
+                <div className="mb-6 flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${theme.iconClass}`}>
+                    <CategoryIcon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-xl font-bold text-charcoal tracking-tight">{category.title}</h3>
+                </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {category.items.map(item => {
                 const isSelected = addedCosts.includes(item.id);
                 return (
-                  <div 
+                  <motion.button
                     key={item.id}
+                    type="button"
                     onClick={() => toggleCost(item.id)}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 flex flex-col justify-between ${
+                    aria-pressed={isSelected}
+                    whileHover={{ y: -4, scale: 1.015 }}
+                    whileTap={{ scale: 0.985 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                    className={`p-4 rounded-xl border-2 text-left transition-colors duration-200 flex flex-col justify-between ${
                       isSelected 
-                        ? 'bg-coral/5 border-coral shadow-sm shadow-coral/10' 
-                        : 'bg-bg border-muted/30 hover:border-coral/50'
+                        ? `${theme.selectedClass} shadow-md`
+                        : `bg-[#FAF8F1] ${theme.borderClass} hover:shadow-md`
                     }`}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="pr-4">
-                        <p className={`font-bold mb-1 ${isSelected ? 'text-coral' : 'text-charcoal'}`}>{item.name}</p>
+                        <p className={`font-bold mb-1 transition-colors ${isSelected ? theme.selectedTextClass : 'text-charcoal'}`}>{item.name}</p>
                         <p className="text-xs text-secondary">{item.description}</p>
                       </div>
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected ? 'border-coral bg-coral text-white' : 'border-muted/30'
+                        isSelected ? `${theme.selectedCheckClass} text-white` : 'border-muted/30 text-secondary'
                       }`}>
-                        {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4 text-secondary" />}
+                        {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                       </div>
                     </div>
                     <div className="mt-2 pt-3 border-t border-muted/50 flex justify-between items-center">
                       <span className="text-xs font-medium text-secondary uppercase tracking-wider">Estimated Cost</span>
-                      <span className="font-bold text-lg text-charcoal">₹{item.amount.toLocaleString()}</span>
+                      <span className={`font-bold text-lg ${isSelected ? theme.selectedTextClass : 'text-charcoal'}`}>₹{item.amount.toLocaleString()}</span>
                     </div>
-                  </div>
+                  </motion.button>
                 );
               })}
             </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-muted/30">

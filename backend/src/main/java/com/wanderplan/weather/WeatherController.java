@@ -24,7 +24,6 @@ public class WeatherController {
         WeatherForecastResponse forecast = weatherService.getWeatherForTrip(tripId, userPrincipal.getId());
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("weather", forecast);
-        responseData.put("isExternalConfigured", weatherService.isExternalApiConfigured());
 
         return ResponseEntity.ok(ApiResponse.success("Weather forecast retrieved", responseData));
     }

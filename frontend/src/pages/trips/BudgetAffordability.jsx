@@ -4,8 +4,8 @@ import { useTrip } from '../../context/TripContext';
 import { motion } from 'framer-motion';
 import { 
   Wallet, ShieldAlert, RefreshCw, Plane, Hotel, Utensils, 
-  Ticket, AlertTriangle, TrendingUp, Users, Info, MoreHorizontal,
-  Lightbulb, Edit3, FileText, Download, MapPin, Heart
+  Ticket, AlertTriangle, TrendingUp, Users,
+  Lightbulb, Edit3, FileText
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import Button from '../../components/common/Button';
@@ -93,6 +93,18 @@ export default function BudgetAffordability() {
   const remaining = budgetData?.remainingBudget ?? (tripBudget - currentTotal);
   const travelers = Array.isArray(trip?.members) ? trip.members.length : (trip?.members || 2);
   const perPersonCost = Math.round(currentTotal / Math.max(1, travelers));
+  const budgetUsagePct = tripBudget > 0 ? (currentTotal / tripBudget) * 100 : 0;
+  const visibleBudgetUsagePct = Math.min(100, Math.max(0, budgetUsagePct));
+  const budgetStatus = remaining < 0
+    ? 'Over budget'
+    : budgetUsagePct >= 85
+      ? 'Budget getting tight'
+      : 'Within budget';
+  const budgetStatusStyles = remaining < 0
+    ? 'bg-rose-100 text-rose-800 border-rose-200'
+    : budgetUsagePct >= 85
+      ? 'bg-amber-100 text-amber-800 border-amber-200'
+      : 'bg-emerald-100 text-emerald-800 border-emerald-200';
 
   const destinationName = trip?.destination || 'Mumbai';
 
@@ -137,154 +149,265 @@ export default function BudgetAffordability() {
   };
 
   return (
-    <PageTransition variant="fadeIn" className="max-w-[1300px] mx-auto text-slate-100 pb-12 font-sans">
-      {/* Top Banner Row */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">
-              Trip Budget <span className="text-[#38bdf8]">Overview</span>
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-              Exceeding Target
-            </span>
+    <PageTransition variant="fadeIn" className="max-w-[1300px] mx-auto text-charcoal pb-12 font-sans space-y-7">
+      <motion.header
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: 'easeOut' }}
+        className="relative overflow-hidden rounded-[2rem] border border-[#174D53] bg-gradient-to-br from-[#102F43] via-[#14534F] to-[#347B69] p-6 text-white shadow-travel-lg md:p-9"
+      >
+        <motion.div
+          animate={{ x: [0, 14, 0], y: [0, 10, 0] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-cyan-200/15 blur-3xl"
+        />
+        <motion.div
+          animate={{ x: [0, -12, 0], y: [0, -8, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+          className="pointer-events-none absolute right-1/3 -bottom-28 h-56 w-56 rounded-full bg-amber-200/15 blur-3xl"
+        />
+        <div className="relative flex flex-col gap-7">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-emerald-100 shadow-inner sm:flex">
+                <Wallet className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+                    Budget <span className="text-emerald-200">Overview</span>
+                  </h1>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${budgetStatusStyles}`}>
+                    {remaining < 0 && <AlertTriangle className="h-3.5 w-3.5" />}
+                    {budgetStatus}
+                  </span>
+                </div>
+                <p className="text-sm text-white/75">
+                  Your trip spending at a glance for <span className="font-semibold text-white">{destinationName}</span>.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchBudgetDetails}
+              disabled={loading}
+              className="gap-2 self-start rounded-xl border-white/25 bg-white/10 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white/20"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
-          <p className="text-sm text-slate-400 mt-1">
-            Complete financial distribution, active expenditures, and cost breakdown for your trip to {destinationName}.
-          </p>
+
+          <div className="grid gap-5 rounded-2xl border border-white/60 bg-white/[0.96] p-5 text-charcoal shadow-xl shadow-[#082B35]/20 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-6">
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-charcoal">Budget utilization</p>
+                  <p className="mt-0.5 text-xs text-muted">Planned spend against your trip limit</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-sm font-extrabold ${remaining < 0 ? 'bg-rose-100 text-rose-800' : budgetUsagePct >= 85 ? 'bg-amber-100 text-amber-900' : 'bg-teal-100 text-teal-900'}`}>
+                  {budgetUsagePct.toFixed(0)}%
+                </span>
+              </div>
+              <div
+                className="h-3.5 overflow-hidden rounded-full bg-slate-200"
+                role="progressbar"
+                aria-label="Trip budget used"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={visibleBudgetUsagePct}
+              >
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${visibleBudgetUsagePct}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className={`h-full rounded-full ${remaining < 0 ? 'bg-gradient-to-r from-rose-500 to-pink-400' : budgetUsagePct >= 85 ? 'bg-gradient-to-r from-amber-400 to-yellow-300' : 'bg-gradient-to-r from-teal-700 via-teal-500 to-emerald-400'}`}
+                />
+              </div>
+              <p className="mt-2.5 text-xs text-muted">
+                <span className="font-semibold text-charcoal">₹{currentTotal.toLocaleString()}</span>
+                {' '}planned out of{' '}
+                <span className="font-semibold text-charcoal">₹{tripBudget.toLocaleString()}</span>
+              </p>
+            </div>
+            <div className="hidden h-16 w-px bg-slate-200 md:block" />
+            <div className="min-w-32 md:text-right">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Available balance</p>
+              <p className={`mt-1 text-2xl font-extrabold tracking-tight ${remaining < 0 ? 'text-rose-700' : 'text-teal-800'}`}>
+                {remaining < 0 ? '−' : ''}₹{Math.abs(remaining).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <nav aria-label="Budget quick actions" className="flex flex-wrap gap-2">
+            {[
+              { label: 'What-if simulator', path: `/trips/${trip.id}/simulator`, icon: Edit3, color: 'text-slate-800 bg-white/95 border-white/70 hover:bg-slate-100' },
+              { label: 'Expenses', path: `/trips/${trip.id}/expenses`, icon: FileText, color: 'text-teal-950 bg-white/95 border-white/70 hover:bg-teal-50' },
+              { label: 'Hidden costs', path: `/trips/${trip.id}/hidden-costs`, icon: ShieldAlert, color: 'text-amber-950 bg-white/95 border-white/70 hover:bg-amber-50' },
+              { label: 'Smart alternatives', path: `/trips/${trip.id}/alternatives`, icon: Lightbulb, color: 'text-emerald-950 bg-white/95 border-white/70 hover:bg-emerald-50' }
+            ].map(({ label, path, icon: Icon, color }, index) => (
+              <motion.button
+                key={label}
+                type="button"
+                onClick={() => navigate(path)}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12 + index * 0.06, duration: 0.25 }}
+                whileHover={{ y: -3, scale: 1.025 }}
+                whileTap={{ scale: 0.98 }}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold shadow-sm transition-colors ${color}`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </motion.button>
+            ))}
+          </nav>
         </div>
+      </motion.header>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchBudgetDetails}
-          disabled={loading}
-          className="bg-slate-800/60 hover:bg-slate-700/60 text-slate-200 border-slate-700/60 gap-2 px-4 py-2 rounded-xl backdrop-blur-md shadow-sm"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Data
-        </Button>
-      </div>
-
-      {/* 4 Glowing Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <motion.section
+        aria-label="Budget summary"
+        initial="hidden"
+        animate="visible"
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.09 } } }}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+      >
         
         {/* Total Budget Card */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="relative rounded-2xl p-5 overflow-hidden backdrop-blur-xl border border-sky-500/20 shadow-lg shadow-sky-950/20"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.05, ease: 'easeOut' }}
+          whileHover={{ y: -4, scale: 1.015, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
+          className="group relative overflow-hidden rounded-2xl border border-slate-300 p-5 shadow-sm transition-shadow hover:shadow-travel-lg xl:col-span-2"
           style={{
-            background: 'linear-gradient(135deg, rgba(14, 38, 77, 0.75) 0%, rgba(10, 25, 53, 0.85) 100%)'
+            background: 'linear-gradient(125deg, #E4EDF3 0%, #CCDFE8 48%, #B6D2DD 100%)'
           }}
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-400/20 shadow-inner">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-900 via-sky-600 to-cyan-400" />
+          <div className="relative z-10 flex items-center justify-between mb-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/80 bg-white/85 text-sky-900 shadow-sm transition-transform duration-300 group-hover:scale-105">
               <Wallet className="w-5 h-5" />
             </div>
-            <button className="text-slate-400 hover:text-white transition-colors">
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+            <span className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-sky-900">Trip limit</span>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">TOTAL BUDGET</span>
-          <p className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight mt-1">
+          <span className="relative z-10 text-[11px] font-bold uppercase tracking-wider text-sky-950/65">Total budget</span>
+          <p className="relative z-10 mt-1 text-3xl font-extrabold tracking-tight text-charcoal lg:text-4xl">
             ₹<AnimatedNumber value={tripBudget} />
           </p>
-          <p className="text-xs text-slate-400 mt-1">Planned allocation limit</p>
+          <p className="relative z-10 mt-1 text-xs text-sky-950/65">Your planned spending limit</p>
         </motion.div>
 
         {/* Total Estimated Spent Card */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="relative rounded-2xl p-5 overflow-hidden backdrop-blur-xl border border-teal-500/20 shadow-lg shadow-teal-950/20"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.14, ease: 'easeOut' }}
+          whileHover={{ y: -4, scale: 1.015, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
+          className="group relative overflow-hidden rounded-2xl border border-teal-300 p-5 shadow-sm transition-shadow hover:shadow-travel-lg"
           style={{
-            background: 'linear-gradient(135deg, rgba(8, 47, 54, 0.75) 0%, rgba(6, 32, 38, 0.85) 100%)'
+            background: 'linear-gradient(135deg, #DCEFE6 0%, #C3E3D4 55%, #A9D4C2 100%)'
           }}
         >
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-teal-900 via-teal-600 to-emerald-400" />
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-400/20 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-white/85 text-teal-900 flex items-center justify-center border border-white/80 shadow-sm transition-transform duration-300 group-hover:scale-105">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <div className="w-6 h-6 rounded-full bg-teal-400/10 flex items-center justify-center text-teal-400">
+            <div className="w-6 h-6 rounded-full bg-white/70 flex items-center justify-center text-teal-700">
               <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">TOTAL ESTIMATED SPENT</span>
-          <p className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight mt-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-teal-900/60">Estimated total</span>
+          <p className="text-2xl lg:text-3xl font-extrabold text-charcoal tracking-tight mt-1">
             ₹<AnimatedNumber value={currentTotal} />
           </p>
-          <p className="text-xs text-slate-400 mt-1">100% of total allocated</p>
+          <p className="text-xs text-teal-900/60 mt-1">{budgetUsagePct.toFixed(0)}% of your budget</p>
         </motion.div>
 
         {/* Remaining Balance Card */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="relative rounded-2xl p-5 overflow-hidden backdrop-blur-xl border border-rose-500/20 shadow-lg shadow-rose-950/20"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.23, ease: 'easeOut' }}
+          whileHover={{ y: -4, scale: 1.015, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
+          className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-shadow hover:shadow-travel-lg ${remaining < 0 ? 'border-rose-300' : 'border-emerald-300'}`}
           style={{
-            background: 'linear-gradient(135deg, rgba(60, 20, 36, 0.75) 0%, rgba(40, 14, 25, 0.85) 100%)'
+            background: remaining < 0
+              ? 'linear-gradient(135deg, #F9DDD9 0%, #F2C9C5 55%, #EFBAB8 100%)'
+              : 'linear-gradient(135deg, #DCEFE0 0%, #C6E3CE 55%, #B0D9BE 100%)'
           }}
         >
+          <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${remaining < 0 ? 'from-rose-800 via-rose-600 to-pink-400' : 'from-emerald-900 via-emerald-600 to-lime-400'}`} />
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-400/20 shadow-inner">
+            <div className={`w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center border shadow-sm ${remaining < 0 ? 'text-rose-700 border-rose-200' : 'text-emerald-700 border-emerald-200'}`}>
               <Wallet className="w-5 h-5" />
             </div>
-            <button className="text-slate-400 hover:text-white transition-colors">
-              <Info className="w-4 h-4" />
-            </button>
+            <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${remaining < 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+              {remaining < 0 ? 'Attention' : 'Available'}
+            </span>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">REMAINING BALANCE</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal/60">{remaining < 0 ? 'Over budget by' : 'Remaining balance'}</span>
           <div className="flex items-baseline gap-1 mt-1">
-            <p className="text-2xl lg:text-3xl font-extrabold text-rose-400 tracking-tight">
+            <p className={`text-2xl lg:text-3xl font-extrabold tracking-tight ${remaining < 0 ? 'text-rose-700' : 'text-emerald-800'}`}>
               ₹<AnimatedNumber value={Math.abs(remaining)} />
             </p>
-            {remaining < 0 && <span className="text-xs font-semibold text-rose-300">(Over)</span>}
           </div>
-          <p className="text-xs text-slate-400 mt-1">Available buffer</p>
+          <p className="text-xs text-charcoal/60 mt-1">{remaining < 0 ? 'Consider reviewing your planned costs' : 'Available for the rest of your trip'}</p>
         </motion.div>
 
         {/* Per Person Cost Card */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="relative rounded-2xl p-5 overflow-hidden backdrop-blur-xl border border-purple-500/20 shadow-lg shadow-purple-950/20"
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.32, ease: 'easeOut' }}
+          whileHover={{ y: -4, scale: 1.015, transition: { type: 'spring', stiffness: 280, damping: 20 } }}
+          className="group relative overflow-hidden rounded-2xl border border-violet-200 p-5 shadow-sm transition-shadow hover:shadow-travel-lg"
           style={{
-            background: 'linear-gradient(135deg, rgba(46, 26, 71, 0.75) 0%, rgba(30, 16, 48, 0.85) 100%)'
+            background: 'linear-gradient(135deg, #EAE7F2 0%, #D9D7EA 55%, #CACDE3 100%)'
           }}
         >
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-900 via-violet-700 to-fuchsia-400" />
           <div className="flex items-center justify-between mb-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-400/20 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-white/85 text-violet-800 flex items-center justify-center border border-white/80 shadow-sm transition-transform duration-300 group-hover:scale-105">
               <Users className="w-5 h-5" />
             </div>
-            <div className="w-7 h-7 rounded-full bg-purple-400/10 flex items-center justify-center text-purple-300">
+            <div className="w-7 h-7 rounded-full bg-white/80 flex items-center justify-center text-slate-600">
               <Users className="w-3.5 h-3.5" />
             </div>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">PER PERSON COST</span>
-          <p className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight mt-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Per person estimate</span>
+          <p className="text-2xl lg:text-3xl font-extrabold text-charcoal tracking-tight mt-1">
             ₹<AnimatedNumber value={perPersonCost} />
           </p>
-          <p className="text-xs text-slate-400 mt-1">Split across {travelers} travelers</p>
+          <p className="text-xs text-slate-600 mt-1">Split across {travelers} travelers</p>
         </motion.div>
 
-      </div>
+      </motion.section>
 
-      {/* Main 3-Column Glass Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      {/* Spending distribution and category details */}
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.12, delayChildren: 0.3 } } }}
+        className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-12"
+      >
         
-        {/* Column 1: Expenditure Distribution Chart (Span 4) */}
-        <div 
-          className="lg:col-span-4 rounded-2xl p-5 border border-slate-700/40 backdrop-blur-xl flex flex-col justify-between"
-          style={{
-            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(11, 17, 32, 0.85) 100%)'
-          }}
+        <motion.div
+          variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
+          whileHover={{ y: -3 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+          className="lg:col-span-5 rounded-2xl p-5 border border-[#D8C8CE] bg-gradient-to-br from-[#E1ECE8] via-[#D9E1DC] to-[#E8D4D9] shadow-travel transition-shadow hover:shadow-travel-md flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
-                <span className="font-bold text-xs">📊</span>
+              <div className="w-8 h-8 rounded-lg bg-slate-200/80 text-slate-700 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4" />
               </div>
-              <h3 className="font-bold text-base text-white">Expenditure Distribution</h3>
+              <h3 className="font-bold text-lg text-charcoal">Spending distribution</h3>
             </div>
-            <p className="text-xs text-slate-400 mb-4 ml-9">Interactive segment breakdown by category</p>
+            <p className="text-xs text-muted mb-4 ml-10">See how your planned trip costs are divided.</p>
 
             {/* Donut Chart */}
             <div className="h-[210px] w-full relative">
@@ -308,12 +431,13 @@ export default function BudgetAffordability() {
                   </Pie>
                   <RechartsTooltip 
                     contentStyle={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.95)', 
-                      borderColor: 'rgba(51, 65, 85, 0.8)', 
+                      backgroundColor: '#ffffff',
+                      borderColor: '#dbe7e1',
                       borderRadius: '10px', 
-                      color: '#ffffff'
+                      color: '#172B2F',
+                      boxShadow: '0 8px 24px rgba(23,43,47,0.12)'
                     }}
-                    itemStyle={{ color: '#ffffff', fontWeight: 600 }}
+                    itemStyle={{ color: '#172B2F', fontWeight: 600 }}
                     formatter={(val) => `₹${Number(val).toLocaleString()}`}
                   />
                 </PieChart>
@@ -321,62 +445,63 @@ export default function BudgetAffordability() {
 
               {/* Center Donut Text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">TOTAL EST.</span>
-                <span className="text-base font-extrabold text-white">
+                <span className="text-[10px] text-muted uppercase font-semibold">Total estimate</span>
+                <span className="text-base font-extrabold text-charcoal">
                   ₹{currentTotal.toLocaleString()}
                 </span>
-                <span className="text-[10px] text-teal-400 font-semibold">100% Budgeted</span>
+                <span className={`text-[10px] font-semibold ${remaining < 0 ? 'text-rose-700' : 'text-teal-800'}`}>
+                  {budgetUsagePct.toFixed(0)}% of budget
+                </span>
               </div>
             </div>
 
             {/* Compact Legend Table */}
             <div className="space-y-1.5 mt-2">
               {pieData.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-xs py-1 px-1">
+                <motion.div key={item.name} whileHover={{ x: 3 }} className="flex items-center justify-between text-xs py-2 px-2 rounded-lg transition-colors hover:bg-white/70">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-300 font-medium">{item.name}</span>
+                    <span className="text-charcoal font-medium">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-slate-400 text-[11px]">{item.percentage}%</span>
-                    <span className="text-slate-200 font-semibold text-right min-w-[55px]">
+                    <span className="text-muted text-[11px]">{item.percentage}%</span>
+                    <span className="text-charcoal font-semibold text-right min-w-[55px]">
                       ₹{item.value.toLocaleString()}
                     </span>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
 
           {/* Bottom Pro Tip Box */}
-          <div className="mt-5 p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5 text-xs text-slate-300">
-            <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="mt-5 p-3 rounded-xl bg-[#F5E9EC] border border-[#E7CBD2] flex items-start gap-2.5 text-xs text-[#704B57]">
+            <Lightbulb className="w-4 h-4 text-[#A35F75] shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong className="text-white">Tip:</strong> Try to keep transport & hotel within 60% of your total budget for a balanced trip!
+              <strong>Tip:</strong> Keep a small buffer for unexpected costs, and compare your largest categories before booking.
             </p>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Column 2: Category Breakdown (Span 5) */}
-        <div 
-          className="lg:col-span-5 rounded-2xl p-5 border border-slate-700/40 backdrop-blur-xl flex flex-col justify-between"
-          style={{
-            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(11, 17, 32, 0.85) 100%)'
-          }}
+        <motion.div
+          variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
+          whileHover={{ y: -3 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+          className="lg:col-span-7 rounded-2xl p-5 border border-[#D9C6CF] bg-gradient-to-br from-[#DCEDE5] via-[#D3E1DA] to-[#E6D1D9] shadow-travel transition-shadow hover:shadow-travel-md flex flex-col justify-between"
         >
           <div>
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-teal-500/15 text-teal-400 flex items-center justify-center">
-                  <span className="font-bold text-xs">📑</span>
+                <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center">
+                  <Wallet className="h-4 w-4" />
                 </div>
-                <h3 className="font-bold text-base text-white">Category Breakdown</h3>
+                <h3 className="font-bold text-lg text-charcoal">Category breakdown</h3>
               </div>
-              <span className="text-[11px] font-semibold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/50">
-                5 Categories
+              <span className="text-[11px] font-semibold text-teal-900 bg-white/80 px-2.5 py-1 rounded-full border border-teal-100">
+                {pieData.length} categories
               </span>
             </div>
-            <p className="text-xs text-slate-400 mb-5 ml-9">Detailed allocations with percentage shares</p>
+            <p className="text-xs text-muted mb-5 ml-10">Amount, share of spending, and estimated cost per person.</p>
 
             {/* List with Progress Bars */}
             <div className="space-y-4">
@@ -386,7 +511,7 @@ export default function BudgetAffordability() {
                 const perPerson = Math.round(item.value / Math.max(1, travelers));
 
                 return (
-                  <div key={item.name} className="space-y-1.5">
+                  <motion.div key={item.name} whileHover={{ x: 4, backgroundColor: 'rgba(255,255,255,0.55)' }} className="space-y-1.5 rounded-xl p-2 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div 
@@ -396,129 +521,65 @@ export default function BudgetAffordability() {
                           <IconComponent className="w-4 h-4" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-semibold text-white leading-tight">{item.name}</h4>
-                          <span className="text-[11px] text-slate-400">{item.percentage}% of total spending</span>
+                          <h4 className="text-sm font-semibold text-charcoal leading-tight">{item.name}</h4>
+                          <span className="text-[11px] text-muted">{item.percentage}% of planned total</span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-bold text-white">₹{item.value.toLocaleString()}</span>
-                        <p className="text-[10px] text-slate-400 font-medium">≈ ₹{perPerson.toLocaleString()} / person</p>
+                        <span className="text-sm font-bold text-charcoal">₹{item.value.toLocaleString()}</span>
+                        <p className="text-[10px] text-muted font-medium">≈ ₹{perPerson.toLocaleString()} / person</p>
                       </div>
                     </div>
 
                     {/* Progress Bar with glowing accent */}
-                    <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden ml-12" style={{ maxWidth: 'calc(100% - 48px)' }}>
-                      <div 
-                        className="h-full rounded-full transition-all duration-700"
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden ml-12" style={{ maxWidth: 'calc(100% - 48px)' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.percentage}%` }}
+                        transition={{ duration: 0.65, ease: 'easeOut' }}
+                        className="h-full rounded-full"
                         style={{ 
-                          width: `${item.percentage}%`,
                           backgroundColor: color,
-                          boxShadow: `0 0 8px ${color}80`
+                          boxShadow: `0 2px 8px ${color}55`
                         }}
                       />
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           </div>
-        </div>
-
-        {/* Column 3: Destination Polaroid & Quick Actions (Span 3) */}
-        <div 
-          className="lg:col-span-3 rounded-2xl p-5 border border-slate-700/40 backdrop-blur-xl flex flex-col justify-between relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(11, 17, 32, 0.85) 100%)'
-          }}
-        >
-          {/* Polaroid Photo Frame */}
-          <div className="relative mx-auto w-full max-w-[240px] pt-1">
-            <div className="bg-white p-2.5 pb-3 rounded-lg shadow-xl shadow-black/40 rotate-1 hover:rotate-0 transition-transform duration-300">
-              <div className="w-full h-32 rounded bg-slate-900 overflow-hidden relative">
-                <img 
-                  src="https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=600&q=80" 
-                  alt={destinationName}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="flex items-center justify-center gap-1 mt-2 text-slate-800 font-bold text-sm">
-                <span>{destinationName}</span>
-                <MapPin className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions List */}
-          <div className="mt-5 space-y-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              QUICK ACTIONS
-            </span>
-
-            <button 
-              onClick={() => navigate(`/trips/${trip.id}/simulator`)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/50 transition-all text-left"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              <span>Edit Budget</span>
-            </button>
-
-            <button 
-              onClick={() => navigate(`/trips/${trip.id}/expenses`)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/50 transition-all text-left"
-            >
-              <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-              <span>View Expense Report</span>
-            </button>
-
-            <button 
-              onClick={() => alert("Downloading budget summary PDF...")}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/50 transition-all text-left"
-            >
-              <Download className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-              <span>Download PDF</span>
-            </button>
-          </div>
-
-          {/* Handwritten Quote Footer */}
-          <div className="mt-4 pt-3 border-t border-slate-800/80 text-center">
-            <p className="text-[11px] text-slate-400 italic font-serif flex items-center justify-center gap-1">
-              Same dreams, bigger plans <Heart className="w-3 h-3 text-rose-400 inline fill-rose-400" />
-            </p>
-          </div>
-
-        </div>
-
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Applied Hidden & Peripheral Costs Details */}
-      <div 
-        className="mt-6 rounded-2xl p-5 border border-slate-700/40 backdrop-blur-xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(11, 17, 32, 0.85) 100%)'
-        }}
+      <motion.section
+        whileHover={{ y: -2 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        className="rounded-2xl p-5 border border-[#876A70] bg-gradient-to-br from-[#72552F] via-[#866348] to-[#916474] text-white shadow-travel transition-shadow hover:shadow-travel-md"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-white/20">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-white/15 text-amber-100 flex items-center justify-center">
               <ShieldAlert className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Applied Hidden & Peripheral Buffers</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="font-bold text-lg text-white">Hidden cost buffers</h3>
+              <p className="text-xs text-white/75">
                 These unexpected expense buffers have been applied directly from your Hidden Costs scanner.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Hidden Cost Buffer</span>
-              <p className="text-lg font-bold text-rose-400">₹{calculatedHiddenCost.toLocaleString()}</p>
+              <span className="text-[10px] text-amber-100/80 uppercase font-semibold">Total hidden cost buffer</span>
+              <p className="text-lg font-bold text-white">₹{calculatedHiddenCost.toLocaleString()}</p>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigate(`/trips/${trip.id}/hidden-costs`)}
-              className="bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700/60 text-xs px-3 py-1.5 rounded-xl ml-2"
+              className="bg-white/95 hover:bg-amber-50 text-amber-900 border-white/70 text-xs px-3 py-1.5 rounded-xl ml-2 transition-all hover:-translate-y-0.5"
             >
               Modify Buffers
             </Button>
@@ -527,39 +588,40 @@ export default function BudgetAffordability() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {hiddenCostItems.map((item, idx) => (
-            <div 
+            <motion.div
               key={item.id || idx}
-              className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between"
+              whileHover={{ y: -3, scale: 1.015 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+              className="p-3 rounded-xl bg-white/80 border border-amber-100 flex items-center justify-between shadow-sm hover:shadow-md"
             >
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                <span className="text-[10px] uppercase font-bold text-muted block tracking-wider">
                   {item.category || 'Buffer'}
                 </span>
-                <p className="text-xs font-semibold text-white mt-0.5">{item.description || item.name}</p>
+                <p className="text-xs font-semibold text-charcoal mt-0.5">{item.description || item.name}</p>
               </div>
-              <span className="text-xs font-bold text-rose-400">
+              <span className="text-xs font-bold text-amber-900">
                 ₹{Number(item.estimatedCost || item.amount || 0).toLocaleString()}
               </span>
-            </div>
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.section>
 
       {/* Applied Smart Alternatives Details */}
-      <div 
-        className="mt-6 rounded-2xl p-5 border border-slate-700/40 backdrop-blur-xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(11, 17, 32, 0.85) 100%)'
-        }}
+      <motion.section
+        whileHover={{ y: -2 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        className="rounded-2xl p-5 border border-[#765468] bg-gradient-to-br from-[#123F49] via-[#18584F] to-[#765468] text-white shadow-travel transition-shadow hover:shadow-travel-md"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-3 border-b border-white/20">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-white/15 text-emerald-100 flex items-center justify-center">
               <Lightbulb className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">Applied Smart Alternatives & Optimizations</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="font-bold text-lg text-white">Smart alternatives</h3>
+              <p className="text-xs text-white/75">
                 Cost-effective choices swapped into your trip itinerary to trim expenditures.
               </p>
             </div>
@@ -569,7 +631,7 @@ export default function BudgetAffordability() {
               variant="outline"
               size="sm"
               onClick={() => navigate(`/trips/${trip.id}/alternatives`)}
-              className="bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700/60 text-xs px-3 py-1.5 rounded-xl"
+              className="bg-white/95 hover:bg-teal-50 text-teal-900 border-white/70 text-xs px-3 py-1.5 rounded-xl transition-all hover:-translate-y-0.5"
             >
               Explore More Alternatives
             </Button>
@@ -577,37 +639,37 @@ export default function BudgetAffordability() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-teal-500/30 flex items-center justify-between">
+          <motion.div whileHover={{ y: -3, scale: 1.01 }} className="p-3.5 rounded-xl bg-white/95 border border-white/70 flex items-center justify-between text-charcoal shadow-sm hover:shadow-md">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] uppercase font-bold text-teal-400 bg-teal-500/15 px-2 py-0.5 rounded">
+                <span className="text-[10px] uppercase font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
                   Stay Alternative
                 </span>
-                <span className="text-xs text-slate-400">Sunset Sands Boutique Stay</span>
+                <span className="text-xs text-muted">Sunset Sands Boutique Stay</span>
               </div>
-              <p className="text-xs text-slate-300">Swapped from Oceanview Resort • Same beach vicinity</p>
+              <p className="text-xs text-charcoal/70">Swapped from Oceanview Resort • Same beach vicinity</p>
             </div>
             <div className="text-right">
-              <span className="text-xs font-bold text-teal-400">+₹8,500 Saved</span>
+              <span className="text-xs font-bold text-teal-800">+₹8,500 Saved</span>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-teal-500/30 flex items-center justify-between">
+          <motion.div whileHover={{ y: -3, scale: 1.01 }} className="p-3.5 rounded-xl bg-white/95 border border-white/70 flex items-center justify-between text-charcoal shadow-sm hover:shadow-md">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] uppercase font-bold text-teal-400 bg-teal-500/15 px-2 py-0.5 rounded">
+                <span className="text-[10px] uppercase font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
                   Tour Alternative
                 </span>
-                <span className="text-xs text-slate-400">Heritage Catamaran Island Tour</span>
+                <span className="text-xs text-muted">Heritage Catamaran Island Tour</span>
               </div>
-              <p className="text-xs text-slate-300">Swapped from Private Yacht Cruise • Certified guides included</p>
+              <p className="text-xs text-charcoal/70">Swapped from Private Yacht Cruise • Certified guides included</p>
             </div>
             <div className="text-right">
-              <span className="text-xs font-bold text-teal-400">+₹8,800 Saved</span>
+              <span className="text-xs font-bold text-teal-800">+₹8,800 Saved</span>
             </div>
-          </div>
+          </motion.div>
         </div>
-      </div>
+        </motion.section>
     </PageTransition>
   );
 }

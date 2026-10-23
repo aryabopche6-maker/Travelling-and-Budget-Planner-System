@@ -9,6 +9,7 @@ import { invitationService } from '../../services/invitationService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { Compass, Mail } from 'lucide-react';
+import { TRAVEL_MOODS } from '../../constants/travelMoods';
 
 const schema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -26,6 +27,15 @@ export default function SignupPage() {
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get('inviteToken'); // invitation token if coming from email
   const invitedEmail = searchParams.get('email');
+  const tripSetupParams = new URLSearchParams();
+  const setupDestination = searchParams.get('destination')?.trim();
+  if (setupDestination) {
+    tripSetupParams.set('destination', setupDestination);
+    searchParams.getAll('interest')
+      .filter(interest => TRAVEL_MOODS.some(mood => mood.id === interest))
+      .forEach(interest => tripSetupParams.append('interest', interest));
+  }
+  const tripSetupSearch = tripSetupParams.toString() ? `?${tripSetupParams.toString()}` : '';
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
@@ -63,7 +73,7 @@ export default function SignupPage() {
           setTimeout(() => navigate('/trips'), 3000);
         }
       } else {
-        navigate('/dashboard');
+        navigate(tripSetupSearch ? `/trips/new${tripSetupSearch}` : '/dashboard');
       }
     } catch (err) {
       setErrorMsg(err?.response?.data?.message || 'Signup failed. Please try again.');
@@ -108,7 +118,7 @@ export default function SignupPage() {
         <p className="mt-2 text-center text-sm text-secondary">
           Already have an account?{' '}
           <Link
-            to={inviteToken ? `/login?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : '/login'}
+            to={inviteToken ? `/login?inviteToken=${inviteToken}${invitedEmail ? `&email=${encodeURIComponent(invitedEmail)}` : ''}` : `/login${tripSetupSearch}`}
             className="font-medium text-teal hover:text-teal-600"
           >
             Log in
