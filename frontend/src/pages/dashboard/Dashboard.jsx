@@ -14,6 +14,12 @@ import { useAuth } from '../../context/AuthContext';
 
 import { tripService } from '../../services/tripService';
 
+const recentActivities = [
+  { id: 1, action: 'Added to itinerary', detail: 'Fushimi Inari Shrine', time: '2h ago', trip: 'Kyoto, Japan' },
+  { id: 2, action: 'Expense logged', detail: 'Flight Tickets - ₹45,000', time: '5h ago', trip: 'Kyoto, Japan' },
+  { id: 3, action: 'New member joined', detail: 'Sarah M.', time: '1d ago', trip: 'Goa Escape' },
+];
+
 const stagger = {
   hidden: {},
   show: {

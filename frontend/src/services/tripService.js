@@ -57,6 +57,11 @@ export const tripService = {
     return response.data;
   },
 
+  removeMember: async (tripId, memberId) => {
+    const response = await api.delete(`/trips/${tripId}/members/${memberId}`);
+    return response.data;
+  },
+
   // Invitation methods
   inviteMember: async (tripId, email) => {
     const response = await api.post(`/trips/${tripId}/invitations`, { email });

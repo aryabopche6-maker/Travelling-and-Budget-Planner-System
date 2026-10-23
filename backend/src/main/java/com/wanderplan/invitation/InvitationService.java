@@ -139,8 +139,15 @@ public class InvitationService {
         oldInvitation.setStatus(InvitationStatus.CANCELLED);
         invitationRepository.save(oldInvitation);
 
+        // Also cancel any existing pending invitations for this email to avoid duplicates
+        String email = oldInvitation.getInvitedEmail().trim().toLowerCase();
+        invitationRepository.findByTripIdAndInvitedEmailAndStatus(tripId, email, InvitationStatus.PENDING)
+                .ifPresent(pendingInv -> {
+                    pendingInv.setStatus(InvitationStatus.CANCELLED);
+                    invitationRepository.save(pendingInv);
+                });
+
         // Check if already a member
-        String email = oldInvitation.getInvitedEmail();
         userRepository.findByEmail(email).ifPresent(user -> {
             if (tripMemberRepository.existsByTripIdAndUserId(tripId, user.getId())) {
                 throw new BadRequestException("User (" + email + ") is already a member of this trip.");

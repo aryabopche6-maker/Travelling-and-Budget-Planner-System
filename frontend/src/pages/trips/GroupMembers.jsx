@@ -25,6 +25,10 @@ export default function GroupMembers() {
   const [copiedId, setCopiedId] = useState(null);
   const [resendingId, setResendingId] = useState(null);
 
+  const [cancellingId, setCancellingId] = useState(null);
+  const [removingMemberId, setRemovingMemberId] = useState(null);
+  const { setTrip } = useTrip();
+
   useEffect(() => {
     if (trip?.id && isTripAdmin) {
       loadInvitations();
@@ -74,24 +78,70 @@ export default function GroupMembers() {
     }
   };
 
-  const handleCancelInvite = async (invitationId) => {
+  const handleCancelInvite = async (invitationId, email) => {
     try {
+      setCancellingId(invitationId);
+      setErrorMsg('');
       await tripService.deleteInvitation(trip.id, invitationId);
-      loadInvitations();
+      setSuccessMsg(`Invitation for ${email || 'member'} was successfully cancelled.`);
+      setTimeout(() => setSuccessMsg(''), 5000);
+      await loadInvitations();
     } catch (error) {
       console.error('Failed to cancel invitation', error);
+      setErrorMsg(error.response?.data?.message || 'Failed to cancel invitation.');
+      setTimeout(() => setErrorMsg(''), 5000);
+    } finally {
+      setCancellingId(null);
     }
   };
 
-  const handleResendInvite = async (invitationId) => {
+  const handleResendInvite = async (invitationId, email) => {
     try {
       setResendingId(invitationId);
-      await invitationService.resendInvitation(trip.id, invitationId);
-      loadInvitations();
+      setErrorMsg('');
+      const resent = await invitationService.resendInvitation(trip.id, invitationId);
+      const inv = resent?.data || resent;
+      if (inv?.acceptUrl) {
+        setLatestInviteEmail(inv.invitedEmail || email);
+        setLatestInviteLink(inv.acceptUrl);
+      }
+      setSuccessMsg(`Invitation resent successfully to ${email || 'member'}!`);
+      setTimeout(() => setSuccessMsg(''), 8000);
+      await loadInvitations();
     } catch (error) {
       console.error('Failed to resend invitation', error);
+      setErrorMsg(error.response?.data?.message || 'Failed to resend invitation.');
+      setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setResendingId(null);
+    }
+  };
+
+  const handleRemoveMember = async (memberId, memberName) => {
+    if (!window.confirm(`Are you sure you want to remove ${memberName} from this trip?`)) {
+      return;
+    }
+    try {
+      setRemovingMemberId(memberId);
+      setErrorMsg('');
+      await tripService.removeMember(trip.id, memberId);
+      setSuccessMsg(`${memberName} was removed from the trip.`);
+      setTimeout(() => setSuccessMsg(''), 5000);
+      
+      // Update trip in context so current members list reflects immediately
+      if (setTrip) {
+        setTrip(prev => ({
+          ...prev,
+          members: (prev?.members || []).filter(m => m.id !== memberId)
+        }));
+      }
+      loadInvitations();
+    } catch (error) {
+      console.error('Failed to remove member', error);
+      setErrorMsg(error.response?.data?.message || 'Failed to remove member.');
+      setTimeout(() => setErrorMsg(''), 5000);
+    } finally {
+      setRemovingMemberId(null);
     }
   };
 
@@ -241,7 +291,12 @@ export default function GroupMembers() {
               </div>
 
               {isTripAdmin && member.role !== 'TRIP_ADMIN' && (
-                <Button variant="ghost" className="text-red-400 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent gap-2 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100">
+                <Button 
+                  variant="ghost" 
+                  isLoading={removingMemberId === member.id}
+                  onClick={() => handleRemoveMember(member.id, member.name)}
+                  className="text-red-400 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent gap-2 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                >
                   <UserMinus className="w-4 h-4" /> <span className="hidden sm:inline">Remove</span>
                 </Button>
               )}
@@ -311,7 +366,7 @@ export default function GroupMembers() {
                       size="sm"
                       variant="outline"
                       isLoading={resendingId === invitation.id}
-                      onClick={() => handleResendInvite(invitation.id)}
+                      onClick={() => handleResendInvite(invitation.id, invitation.invitedEmail)}
                       className="gap-1.5 border-teal/30 text-teal hover:bg-teal/10 text-xs"
                     >
                       <RefreshCw className="w-3.5 h-3.5" /> Resend
@@ -322,7 +377,8 @@ export default function GroupMembers() {
                   {invitation.status === 'PENDING' && (
                     <Button
                       size="sm"
-                      onClick={() => handleCancelInvite(invitation.id)}
+                      isLoading={cancellingId === invitation.id}
+                      onClick={() => handleCancelInvite(invitation.id, invitation.invitedEmail)}
                       variant="ghost"
                       className="text-red-400 hover:bg-red-500/10 hover:border-red-500/30 border border-transparent gap-1.5 text-xs"
                     >
