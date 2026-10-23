@@ -146,8 +146,7 @@ export default function TripDashboard() {
         
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Budget Overview — Admin Only */}
-          {isTripAdmin && (
+          {/* Budget Overview */}
           <Reveal delay={0.1}>
             <Card glass delay={0.1} className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -207,7 +206,6 @@ export default function TripDashboard() {
               </div>
             </Card>
           </Reveal>
-          )}
 
           {/* Member Welcome Card — shown only for non-admin members */}
           {!isTripAdmin && (

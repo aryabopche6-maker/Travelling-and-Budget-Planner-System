@@ -129,7 +129,7 @@ function TripLayoutInner() {
       ];
     }
 
-    // Member view — only trip info, no planning/admin controls
+    // Member view — can see all options except Simulator and Members
     return [
       {
         title: 'TRIP',
@@ -138,15 +138,21 @@ function TripLayoutInner() {
         ]
       },
       {
-        title: 'EXPLORE',
+        title: 'PLAN',
         items: [
-          { name: 'Itinerary', path: `/trips/${trip.id}/itinerary`, icon: <Calendar className="w-4 h-4" /> },
+          { name: 'Mood & Preferences', path: `/trips/${trip.id}/mood`, icon: <Smile className="w-4 h-4" /> },
+          { name: 'Places', path: `/trips/${trip.id}/places`, icon: <MapPin className="w-4 h-4" /> },
+          { name: 'Hotels', path: `/trips/${trip.id}/hotels`, icon: <Hotel className="w-4 h-4" /> },
           { name: 'Weather', path: `/trips/${trip.id}/weather`, icon: <CloudSun className="w-4 h-4" /> },
+          { name: 'Itinerary', path: `/trips/${trip.id}/itinerary`, icon: <Calendar className="w-4 h-4" /> }
         ]
       },
       {
         title: 'MONEY',
         items: [
+          { name: 'Budget', path: `/trips/${trip.id}/budget`, icon: <Wallet className="w-4 h-4" /> },
+          { name: 'Hidden Costs', path: `/trips/${trip.id}/hidden-costs`, icon: <EyeOff className="w-4 h-4" /> },
+          { name: 'Smart Alternatives', path: `/trips/${trip.id}/alternatives`, icon: <Lightbulb className="w-4 h-4" /> },
           { name: 'Expenses', path: `/trips/${trip.id}/expenses`, icon: <BadgeIndianRupee className="w-4 h-4" /> },
         ]
       },
