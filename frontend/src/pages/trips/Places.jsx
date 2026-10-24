@@ -9,6 +9,7 @@ import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Reveal from '../../components/animations/Reveal';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getPlacePhoto } from '../../utils/destinationImages';
 
 export default function Places() {
   const { trip } = useTrip();
@@ -354,22 +355,13 @@ export default function Places() {
               <Reveal key={place.id || place.name || i} delay={Math.min(0.05 + i * 0.01, 0.2)} className={isFeatured ? 'md:col-span-2' : ''}>
                 <motion.div layoutId={`place-card-${place.id || place.name || i}`} className="h-full">
                   <Card hoverLift className={`p-0 overflow-hidden flex flex-col group border-muted/30 hover:border-teal/30 shadow-md hover:shadow-xl hover:shadow-teal/10 cursor-pointer card-travel h-full ${isFeatured ? 'md:flex-row' : ''}`} onClick={() => setSelectedPlace({...place, _uniqueId: place.id || place.name || i})}>
-                    <motion.div layoutId={`place-image-${place.id || place.name || i}`} className={`${isFeatured ? 'md:w-1/2' : ''} h-64 md:h-auto min-h-[250px] shrink-0 relative overflow-hidden bg-gradient-to-br from-teal/20 via-sky/10 to-teal/5 flex items-center justify-center`}>
-                      {place.imageUrl ? (
-                        <img 
-                          src={place.imageUrl} 
-                          alt={place.name} 
-                          onError={(e) => { e.currentTarget.hidden = true; }}
-                          className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100" 
-                        />
-                      ) : (
-                        <div className="p-8 text-center flex flex-col items-center gap-2">
-                          <div className="w-14 h-14 rounded-2xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
-                            <Compass className="w-7 h-7" />
-                          </div>
-                          <span className="text-xs font-semibold text-teal/80">OpenStreetMap listing</span>
-                        </div>
-                      )}
+                    <motion.div layoutId={`place-image-${place.id || place.name || i}`} className={`${isFeatured ? 'md:w-1/2' : ''} h-64 md:h-auto min-h-[250px] shrink-0 relative overflow-hidden bg-slate-900 flex items-center justify-center`}>
+                      <img 
+                        src={getPlacePhoto(place, activeSearchArea || trip?.destination)} 
+                        alt={place.name} 
+                        className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-105" 
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                       <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 items-center">
                         <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-bold text-charcoal border border-white/40 uppercase tracking-wider shadow-sm">
                           {place.category || 'Attraction'}
@@ -524,22 +516,12 @@ export default function Places() {
               className="bg-white rounded-3xl overflow-hidden max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <motion.div layoutId={`place-image-${selectedPlace._uniqueId || selectedPlace.id || selectedPlace.name}`} className="relative h-64 md:h-80 overflow-hidden bg-gradient-to-br from-teal/20 via-sky/10 to-teal/5 flex items-center justify-center">
-                {selectedPlace.imageUrl ? (
-                  <img 
-                    src={selectedPlace.imageUrl} 
-                    alt={selectedPlace.name} 
-                    onError={(e) => { e.currentTarget.hidden = true; }}
-                    className="w-full h-full object-cover" 
-                  />
-                ) : (
-                  <div className="p-8 text-center flex flex-col items-center gap-3">
-                    <div className="w-20 h-20 rounded-3xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
-                      <Compass className="w-10 h-10" />
-                    </div>
-                    <span className="text-sm font-semibold text-teal">OpenStreetMap listing</span>
-                  </div>
-                )}
+              <motion.div layoutId={`place-image-${selectedPlace._uniqueId || selectedPlace.id || selectedPlace.name}`} className="relative h-64 md:h-80 overflow-hidden bg-slate-900 flex items-center justify-center">
+                <img 
+                  src={getPlacePhoto(selectedPlace, activeSearchArea || trip?.destination)} 
+                  alt={selectedPlace.name} 
+                  className="w-full h-full object-cover" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 <button 
                   onClick={() => setSelectedPlace(null)} 
