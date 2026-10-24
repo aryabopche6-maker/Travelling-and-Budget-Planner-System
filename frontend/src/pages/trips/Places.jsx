@@ -29,7 +29,41 @@ export default function Places() {
   const [activeSearchArea, setActiveSearchArea] = useState('');
   const [radius, setRadius] = useState(10);
   const [visiblePlacesCount, setVisiblePlacesCount] = useState(24);
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const searchRequestId = useRef(0);
+
+  // Debounced live location autocomplete (Google Maps style)
+  useEffect(() => {
+    const q = searchAreaInput.trim();
+    if (q.length < 2) {
+      setLocationSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setIsLoadingSuggestions(true);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`, {
+          headers: { 'Accept-Language': 'en' }
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setLocationSuggestions(data.map(item => ({
+            name: item.name || item.display_name.split(',')[0],
+            fullAddress: item.display_name,
+            lat: item.lat,
+            lon: item.lon
+          })));
+        }
+      } catch (err) {
+        console.warn("Autocomplete error:", err);
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchAreaInput]);
 
   const loadSavedPlaces = async () => {
     if (!trip?.id) return;
@@ -261,15 +295,49 @@ export default function Places() {
       <Reveal delay={0.05}>
         <Card className="p-4 bg-bg border-muted/30">
           <form onSubmit={handleSearchArea} className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+            <div className="relative flex-1 z-30">
               <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-teal" />
               <Input 
-                placeholder="Optional: narrow results to a city or area"
+                placeholder="Search city, area or landmark (e.g. Delhi, Kochi)..."
                 value={searchAreaInput}
                 maxLength={120}
-                onChange={(e) => setSearchAreaInput(e.target.value)}
+                onFocus={() => setShowLocationDropdown(true)}
+                onChange={(e) => {
+                  setSearchAreaInput(e.target.value);
+                  setShowLocationDropdown(true);
+                }}
                 className="pl-10 bg-white border-muted/30"
               />
+              {/* Google Maps Style Location Autocomplete Dropdown */}
+              {showLocationDropdown && locationSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden divide-y divide-slate-100 z-50">
+                  {locationSuggestions.map((sug, sIdx) => (
+                    <button
+                      key={sIdx}
+                      type="button"
+                      onClick={() => {
+                        setSearchAreaInput(sug.name);
+                        setShowLocationDropdown(false);
+                        setActiveSearchArea(sug.name);
+                        fetchPlaces(sug.name, radius);
+                      }}
+                      className="w-full p-3.5 text-left hover:bg-teal/10 flex items-start gap-3 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 group-hover:bg-teal group-hover:text-white flex items-center justify-center shrink-0 mt-0.5 transition-colors">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-extrabold text-sm text-slate-900 group-hover:text-teal truncate">
+                          {sug.name}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate font-medium">
+                          {sug.fullAddress}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="relative w-full sm:w-44">
               <Crosshair className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
