@@ -25,10 +25,13 @@ public class EmailService {
     @Autowired
     private Environment environment;
 
-    @Value("${spring.mail.username:}")
+    @Value("${spring.mail.username:${MAIL_USERNAME:}}")
     private String mailUsername;
 
-    @Value("${app.frontend.url:http://localhost:5173}")
+    @Value("${spring.mail.password:${MAIL_PASSWORD:}}")
+    private String mailPassword;
+
+    @Value("${app.frontend.url:https://travelling-and-budget-planner-syste.vercel.app}")
     private String frontendUrl;
 
     public boolean sendTripInvitationEmail(TripInvitation invitation) {
@@ -42,11 +45,18 @@ public class EmailService {
                 ? trip.getStartDate().format(dtf) + " to " + trip.getEndDate().format(dtf)
                 : "Upcoming Dates";
 
-        String acceptUrl = frontendUrl + "/invitations/accept?token=" + invitation.getToken();
-        String declineUrl = frontendUrl + "/invitations/decline?token=" + invitation.getToken();
+        String acceptUrl = frontendUrl.replaceAll("/+$", "") + "/invitations/accept?token=" + invitation.getToken();
+        String declineUrl = frontendUrl.replaceAll("/+$", "") + "/invitations/decline?token=" + invitation.getToken();
 
-        if (mailSender == null || mailUsername == null || mailUsername.isBlank()
-                || environment.getProperty("spring.mail.password", "").isBlank()) {
+        String effectiveUsername = (mailUsername != null && !mailUsername.isBlank()) 
+                ? mailUsername 
+                : System.getenv("MAIL_USERNAME");
+        String effectivePassword = (mailPassword != null && !mailPassword.isBlank()) 
+                ? mailPassword 
+                : System.getenv("MAIL_PASSWORD");
+
+        if (mailSender == null || effectiveUsername == null || effectiveUsername.isBlank()
+                || effectivePassword == null || effectivePassword.isBlank()) {
             log.error("Invitation email was not sent because SMTP is not configured. Set MAIL_USERNAME and MAIL_PASSWORD.");
             return false;
         }
@@ -55,7 +65,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(mailUsername, "WanderPlan Travel Planner");
+            helper.setFrom(effectiveUsername, "WanderPlan Travel Planner");
             helper.setTo(toEmail);
             helper.setSubject("You're Invited! Join " + inviterName + " on a trip to " + destination);
             helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
