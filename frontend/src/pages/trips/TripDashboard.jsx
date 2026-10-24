@@ -80,9 +80,9 @@ export default function TripDashboard() {
       ] = await Promise.allSettled([
         budgetService.getBudget(trip.id),
         expenseService.getExpenses(trip.id),
-        api.get(`/weather/trips/${trip.id}`),
+        api.get(`/trips/${trip.id}/weather`),
         itineraryService.getItinerary(trip.id),
-        pollService.getPolls(trip.id),
+        pollService.getTripPolls(trip.id),
         api.get(`/activities/trips/${trip.id}`)
       ]);
 
@@ -94,7 +94,7 @@ export default function TripDashboard() {
       if (expensesResult.status === 'fulfilled') setExpenses(expensesResult.value || []);
       else setExpensesError(true);
 
-      if (weatherResult.status === 'fulfilled') setWeatherSummary(weatherResult.value.data?.data || null);
+      if (weatherResult.status === 'fulfilled') setWeatherSummary(weatherResult.value.data?.data?.weather || null);
       else setWeatherError(true);
 
       if (itineraryResult.status === 'fulfilled') setItineraryDays(itineraryResult.value?.days || []);
