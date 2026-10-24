@@ -24,6 +24,7 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\con
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\config\WebConfig.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\BadRequestException.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\ErrorResponse.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\ExternalServiceUnavailableException.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\ForbiddenException.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\GlobalExceptionHandler.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\exception\ResourceNotFoundException.java
@@ -45,6 +46,7 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\hot
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationController.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationDetailResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationResponse.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationSchemaMigration.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationService.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\InvitationStatus.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\invitation\SendInvitationRequest.java
@@ -100,7 +102,15 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sec
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\LocationUpdateRequest.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSAlert.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSAlertRepository.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSContact.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSContactRepository.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSContactRequest.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSContactResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSController.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSDelivery.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSDeliveryRepository.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSDeliveryResult.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSDeliveryService.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSRequest.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\sos\SOSService.java
@@ -134,3 +144,4 @@ C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\Wan
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\weather\WeatherController.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\weather\WeatherForecastResponse.java
 C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\weather\WeatherService.java
+C:\Travelling and Budget Planner System\backend\src\main\java\com\wanderplan\weather\WeatherUnavailableException.java
