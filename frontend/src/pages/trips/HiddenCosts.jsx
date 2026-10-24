@@ -89,28 +89,49 @@ export default function HiddenCosts() {
   const { trip } = useTrip();
   const navigate = useNavigate();
 
-  const [addedCosts, setAddedCosts] = useState(['t1', 'a1']);
+  const [addedCosts, setAddedCosts] = useState([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isLoadingCosts, setIsLoadingCosts] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [applyError, setApplyError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [existingCosts, setExistingCosts] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!trip?.id) return;
-    budgetService.getBudget(trip.id).then((res) => {
-      if (res && res.hiddenCostItems) {
-        setExistingCosts(res.hiddenCostItems);
-        const matched = [];
-        hiddenCostCatalog.flatMap(c => c.items).forEach(item => {
-          if (res.hiddenCostItems.some(h => h.description === item.name)) {
-            matched.push(item.id);
-          }
-        });
-        if (matched.length > 0) {
-          setAddedCosts(matched);
+    let isMounted = true;
+    const loadCosts = async () => {
+      setIsLoadingCosts(true);
+      setLoadError('');
+      try {
+        if (!trip?.id) throw new Error('Trip details are unavailable.');
+        const budget = await budgetService.getBudget(trip.id);
+        if (!Array.isArray(budget?.hiddenCostItems)) {
+          throw new Error('The current hidden costs could not be verified.');
         }
+        const costs = budget.hiddenCostItems;
+        const items = hiddenCostCatalog.flatMap(category => category.items);
+        if (isMounted) {
+          setExistingCosts(costs);
+          setAddedCosts(items
+            .filter(item => costs.some(cost => cost.description === item.name))
+            .map(item => item.id));
+        }
+      } catch (error) {
+        console.error('Could not fetch hidden costs', error);
+        if (isMounted) {
+          setLoadError(error.response?.data?.message || error.message || 'Could not load the current hidden costs.');
+        }
+      } finally {
+        if (isMounted) setIsLoadingCosts(false);
       }
-    }).catch(err => console.error("Could not fetch hidden costs", err));
-  }, [trip?.id]);
+    };
+
+    loadCosts();
+    return () => {
+      isMounted = false;
+    };
+  }, [trip?.id, reloadKey]);
 
   const toggleCost = (id) => {
     setAddedCosts(prev => 
@@ -132,33 +153,76 @@ export default function HiddenCosts() {
   const totalAdded = selectedItems.reduce((sum, item) => sum + item.amount, 0);
 
   const handleApply = async () => {
-    if (!trip?.id) return;
+    if (!trip?.id || isLoadingCosts || loadError) return;
     setIsUpdating(true);
     setSuccessMessage('');
+    setApplyError('');
+
+    let completedChanges = 0;
+    const catalogItems = hiddenCostCatalog.flatMap(category => category.items);
+    const selectedNames = new Set(selectedItems.map(item => item.name));
+    const currentCatalogCosts = existingCosts.filter(cost =>
+      catalogItems.some(item => item.name === cost.description)
+    );
+    const itemsToAdd = selectedItems.filter(item =>
+      !currentCatalogCosts.some(cost => cost.description === item.name)
+    );
+    const costsToRemove = currentCatalogCosts.filter(cost =>
+      !selectedNames.has(cost.description)
+    );
 
     try {
-      for (const cost of existingCosts) {
-        if (cost.id) {
-          await budgetService.deleteHiddenCost(trip.id, cost.id).catch(() => {});
-        }
-      }
-
-      for (const item of selectedItems) {
+      for (const item of itemsToAdd) {
         await budgetService.addHiddenCost(trip.id, {
           category: item.category,
           description: item.name,
           estimatedCost: item.amount,
           isEstimate: true
         });
+        completedChanges += 1;
       }
 
+      for (const cost of costsToRemove) {
+        if (!cost.id) {
+          throw new Error(`Could not safely remove “${cost.description}” because it has no ID.`);
+        }
+        await budgetService.deleteHiddenCost(trip.id, cost.id);
+        completedChanges += 1;
+      }
+
+      setExistingCosts([
+        ...existingCosts.filter(cost => !currentCatalogCosts.includes(cost)),
+        ...currentCatalogCosts.filter(cost => selectedNames.has(cost.description)),
+        ...itemsToAdd.map(item => ({
+          description: item.name,
+          category: item.category,
+          estimatedCost: item.amount,
+          isEstimate: true
+        }))
+      ]);
       setSuccessMessage('Hidden costs successfully synced with Trip Budget!');
       setTimeout(() => {
         navigate(`/trips/${trip.id}/budget`);
       }, 1000);
     } catch (err) {
       console.error('Failed to apply hidden costs:', err);
-      navigate(`/trips/${trip.id}/budget`);
+      try {
+        const budget = await budgetService.getBudget(trip.id);
+        if (Array.isArray(budget?.hiddenCostItems)) {
+          const costs = budget.hiddenCostItems;
+          const items = hiddenCostCatalog.flatMap(category => category.items);
+          setExistingCosts(costs);
+          setAddedCosts(items
+            .filter(item => costs.some(cost => cost.description === item.name))
+            .map(item => item.id));
+        }
+      } catch (refreshError) {
+        console.error('Could not refresh hidden costs after a failed update', refreshError);
+      }
+      const partialUpdate = completedChanges > 0
+        ? ' Some changes may already have been saved; the current selection was refreshed where possible.'
+        : '';
+      setApplyError(`${err.response?.data?.message || err.message || 'Could not save hidden costs.'}${partialUpdate}`);
     } finally {
       setIsUpdating(false);
     }
@@ -220,12 +284,14 @@ export default function HiddenCosts() {
           <div className="flex items-center gap-2.5">
             <button
               onClick={selectAll}
+              disabled={isLoadingCosts || Boolean(loadError) || isUpdating}
               className="text-xs font-bold px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all shadow-sm border border-white/20"
             >
               ✓ Select All Recommendations
             </button>
             <button
               onClick={clearAll}
+              disabled={isLoadingCosts || Boolean(loadError) || isUpdating}
               className="text-xs font-bold px-3.5 py-2 rounded-xl bg-black/20 hover:bg-black/30 text-teal-100 transition-all border border-white/10"
             >
               ✕ Clear Selection
@@ -268,6 +334,19 @@ export default function HiddenCosts() {
           </motion.div>
         )}
       </AnimatePresence>
+      {applyError && (
+        <div role="alert" className="bg-red-500/10 border border-red-500/30 text-red-800 p-4 rounded-2xl">
+          {applyError}
+        </div>
+      )}
+      {loadError && (
+        <div role="alert" className="bg-red-500/10 border border-red-500/30 text-red-800 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+          <span>Could not load saved hidden costs: {loadError}</span>
+          <Button variant="outline" onClick={() => setReloadKey(key => key + 1)}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       {/* Catalog Cards Grid with High Contrast & Vivid Gradients */}
       <div className="grid grid-cols-1 gap-7">
@@ -313,6 +392,7 @@ export default function HiddenCosts() {
                       key={item.id}
                       type="button"
                       onClick={() => toggleCost(item.id)}
+                      disabled={isLoadingCosts || Boolean(loadError) || isUpdating}
                       whileHover={{ y: -4, scale: 1.015 }}
                       whileTap={{ scale: 0.985 }}
                       transition={{ type: 'spring', stiffness: 350, damping: 20 }}
@@ -388,6 +468,7 @@ export default function HiddenCosts() {
 
           <Button 
             onClick={handleApply} 
+            disabled={isLoadingCosts || Boolean(loadError)}
             isLoading={isUpdating} 
             className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-amber-400 to-[#FF6B4A] hover:from-amber-300 hover:to-coral text-slate-950 shadow-xl shadow-black/20 font-extrabold rounded-xl transition-all"
           >

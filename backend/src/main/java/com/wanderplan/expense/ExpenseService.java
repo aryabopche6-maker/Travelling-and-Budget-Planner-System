@@ -24,6 +24,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -61,6 +65,17 @@ public class ExpenseService {
         User payer = userRepository.findById(payerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payer user not found"));
 
+        String splitType = request.getSplitType() != null ? request.getSplitType().trim().toUpperCase() : "EQUAL";
+        if (!"EQUAL".equals(splitType) && !"CUSTOM".equals(splitType)) {
+            throw new BadRequestException("Split type must be EQUAL or CUSTOM");
+        }
+
+        List<TripMember> members = tripMemberRepository.findByTripId(tripId);
+        List<ExpenseSplitDto> customSplits = request.getSplits();
+        if ("CUSTOM".equals(splitType)) {
+            validateCustomSplits(request.getAmount(), customSplits, tripId);
+        }
+
         Expense expense = Expense.builder()
                 .trip(trip)
                 .title(request.getTitle())
@@ -70,7 +85,7 @@ public class ExpenseService {
                 .date(request.getDate() != null ? request.getDate() : LocalDate.now())
                 .category(request.getCategory() != null ? request.getCategory() : "Misc")
                 .paymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : "UPI")
-                .splitType(request.getSplitType() != null ? request.getSplitType() : "EQUAL")
+                .splitType(splitType)
                 .proofUrl(request.getProofUrl())
                 .status("PENDING")
                 .splits(new ArrayList<>())
@@ -79,8 +94,7 @@ public class ExpenseService {
         expense = expenseRepository.save(expense);
 
         // Process splits
-        List<TripMember> members = tripMemberRepository.findByTripId(tripId);
-        if ("EQUAL".equalsIgnoreCase(request.getSplitType()) || request.getSplits() == null || request.getSplits().isEmpty()) {
+        if ("EQUAL".equals(splitType)) {
             double splitAmount = request.getAmount() / Math.max(1, members.size());
             for (TripMember m : members) {
                 ExpenseSplit split = ExpenseSplit.builder()
@@ -88,21 +102,20 @@ public class ExpenseService {
                         .userId(m.getUser().getId())
                         .userName(m.getUser().getName())
                         .amount(splitAmount)
-                        .isPaid(m.getUser().getId().equals(userId))
+                        .isPaid(m.getUser().getId().equals(payerId))
                         .build();
                 expense.getSplits().add(split);
             }
         } else {
-            for (ExpenseSplitDto sDto : request.getSplits()) {
-                if (sDto.getUserId() == null || !tripMemberRepository.existsByTripIdAndUserId(tripId, sDto.getUserId())) {
-                    throw new BadRequestException("Every expense split must belong to a trip member");
-                }
+            for (ExpenseSplitDto sDto : customSplits) {
+                User splitUser = userRepository.findById(sDto.getUserId())
+                        .orElseThrow(() -> new BadRequestException("Every expense split must belong to a trip member"));
                 ExpenseSplit split = ExpenseSplit.builder()
                         .expense(expense)
                         .userId(sDto.getUserId())
-                        .userName(sDto.getUserName())
+                        .userName(splitUser.getName())
                         .amount(sDto.getAmount())
-                        .isPaid(sDto.getUserId().equals(userId))
+                        .isPaid(sDto.getUserId().equals(payerId))
                         .build();
                 expense.getSplits().add(split);
             }
@@ -110,6 +123,32 @@ public class ExpenseService {
 
         expense = expenseRepository.save(expense);
         return mapToResponse(expense);
+    }
+
+    private void validateCustomSplits(Double expenseAmount, List<ExpenseSplitDto> splits, Long tripId) {
+        if (splits == null || splits.isEmpty()) {
+            throw new BadRequestException("Custom splits are required for a CUSTOM split");
+        }
+
+        Set<Long> splitUserIds = new HashSet<>();
+        BigDecimal splitTotal = BigDecimal.ZERO;
+        for (ExpenseSplitDto split : splits) {
+            if (split.getUserId() == null || !tripMemberRepository.existsByTripIdAndUserId(tripId, split.getUserId())) {
+                throw new BadRequestException("Every expense split must belong to a trip member");
+            }
+            if (!splitUserIds.add(split.getUserId())) {
+                throw new BadRequestException("Each trip member can only appear once in a custom split");
+            }
+            if (split.getAmount() == null || !Double.isFinite(split.getAmount()) || split.getAmount() < 0) {
+                throw new BadRequestException("Custom split amounts must be non-negative numbers");
+            }
+            splitTotal = splitTotal.add(BigDecimal.valueOf(split.getAmount()));
+        }
+
+        BigDecimal amount = BigDecimal.valueOf(expenseAmount).setScale(2, RoundingMode.HALF_UP);
+        if (splitTotal.setScale(2, RoundingMode.HALF_UP).compareTo(amount) != 0) {
+            throw new BadRequestException("Custom split amounts must add up to the expense amount");
+        }
     }
 
     public List<ExpenseResponse> getTripExpenses(Long tripId, Long userId) {

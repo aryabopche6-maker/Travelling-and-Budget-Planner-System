@@ -7,6 +7,7 @@ import com.wanderplan.itinerary.ItineraryService;
 import com.wanderplan.itinerary.TripSelectedHotel;
 import com.wanderplan.itinerary.TripSelectedPlace;
 import com.wanderplan.itinerary.TripSelectedPlaceRepository;
+import com.wanderplan.expense.ExpenseRepository;
 import com.wanderplan.trip.Trip;
 import com.wanderplan.trip.TripRepository;
 import com.wanderplan.trip.TripService;
@@ -28,6 +29,9 @@ public class BudgetService {
 
     @Autowired
     private HiddenCostRepository hiddenCostRepository;
+
+    @Autowired
+    private ExpenseRepository expenseRepository;
 
     @Autowired
     private TripService tripService;
@@ -67,7 +71,10 @@ public class BudgetService {
         double transport = Math.round(totalBudget * 0.30);
         double food = Math.round(totalBudget * 0.15);
         double activities = Math.round(totalBudget * 0.10);
-        double totalSpent = transport + hotel + food + activities + hiddenCostTotal;
+        double totalSpent = expenseRepository.findByTripId(tripId).stream()
+                .filter(expense -> !"REJECTED".equalsIgnoreCase(expense.getStatus()))
+                .mapToDouble(expense -> expense.getAmount() != null ? expense.getAmount() : 0.0)
+                .sum();
         double remainingBudget = totalBudget - totalSpent;
         double percentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 

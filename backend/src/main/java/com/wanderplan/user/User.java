@@ -33,6 +33,22 @@ public class User {
 
     private String phone;
 
+    @Column(name = "email_notifications")
+    private Boolean emailNotifications = true;
+
+    @Column(name = "push_notifications")
+    private Boolean pushNotifications = true;
+
+    @Column(name = "sos_alerts_enabled")
+    private Boolean sosAlertsEnabled = true;
+
+    @Column(length = 8)
+    private String currency = "INR";
+
+    private String emergencyContactName = "";
+
+    private String emergencyContactPhone = "";
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -91,6 +107,19 @@ public class User {
     public void setPhone(String phone) {
         this.phone = phone;
     }
+
+    public Boolean getEmailNotifications() { return emailNotifications; }
+    public void setEmailNotifications(Boolean emailNotifications) { this.emailNotifications = emailNotifications; }
+    public Boolean getPushNotifications() { return pushNotifications; }
+    public void setPushNotifications(Boolean pushNotifications) { this.pushNotifications = pushNotifications; }
+    public Boolean getSosAlertsEnabled() { return sosAlertsEnabled; }
+    public void setSosAlertsEnabled(Boolean sosAlertsEnabled) { this.sosAlertsEnabled = sosAlertsEnabled; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public String getEmergencyContactName() { return emergencyContactName; }
+    public void setEmergencyContactName(String emergencyContactName) { this.emergencyContactName = emergencyContactName; }
+    public String getEmergencyContactPhone() { return emergencyContactPhone; }
+    public void setEmergencyContactPhone(String emergencyContactPhone) { this.emergencyContactPhone = emergencyContactPhone; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

@@ -2,12 +2,11 @@ package com.wanderplan.user;
 
 import com.wanderplan.exception.BadRequestException;
 import com.wanderplan.exception.ResourceNotFoundException;
+import com.wanderplan.auth.PasswordResetTokenRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserService {
@@ -18,8 +17,8 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // Temporary storage for user settings
-    private final Map<Long, UserSettingsDto> settingsMap = new ConcurrentHashMap<>();
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
 
     public UserResponse getUserProfile(Long userId) {
         User user = userRepository.findById(userId)
@@ -54,6 +53,7 @@ public class UserService {
                 .build();
     }
 
+    @Transactional
     public void changePassword(Long userId, ChangePasswordRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -64,21 +64,35 @@ public class UserService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        passwordResetTokenRepository.deleteByUserId(userId);
     }
 
     public UserSettingsDto getSettings(Long userId) {
-        return settingsMap.computeIfAbsent(userId, id -> UserSettingsDto.builder()
-                .emailNotifications(true)
-                .pushNotifications(true)
-                .sosAlertsEnabled(true)
-                .currency("INR")
-                .emergencyContactName("")
-                .emergencyContactPhone("")
-                .build());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return mapSettings(user);
     }
 
     public UserSettingsDto updateSettings(Long userId, UserSettingsDto settings) {
-        settingsMap.put(userId, settings);
-        return settings;
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        user.setEmailNotifications(settings.isEmailNotifications());
+        user.setPushNotifications(settings.isPushNotifications());
+        user.setSosAlertsEnabled(settings.isSosAlertsEnabled());
+        user.setCurrency(settings.getCurrency() != null && !settings.getCurrency().isBlank() ? settings.getCurrency() : "INR");
+        user.setEmergencyContactName(settings.getEmergencyContactName() != null ? settings.getEmergencyContactName() : "");
+        user.setEmergencyContactPhone(settings.getEmergencyContactPhone() != null ? settings.getEmergencyContactPhone() : "");
+        return mapSettings(userRepository.save(user));
+    }
+
+    private UserSettingsDto mapSettings(User user) {
+        return UserSettingsDto.builder()
+                .emailNotifications(user.getEmailNotifications() == null || user.getEmailNotifications())
+                .pushNotifications(user.getPushNotifications() == null || user.getPushNotifications())
+                .sosAlertsEnabled(user.getSosAlertsEnabled() == null || user.getSosAlertsEnabled())
+                .currency(user.getCurrency() != null ? user.getCurrency() : "INR")
+                .emergencyContactName(user.getEmergencyContactName() != null ? user.getEmergencyContactName() : "")
+                .emergencyContactPhone(user.getEmergencyContactPhone() != null ? user.getEmergencyContactPhone() : "")
+                .build();
     }
 }

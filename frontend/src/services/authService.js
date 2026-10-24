@@ -22,6 +22,16 @@ export const authService = {
     throw new Error(response.data?.message || "Registration failed");
   },
 
+  forgotPassword: async (email) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token, newPassword) => {
+    const response = await api.post('/auth/reset-password', { token, newPassword });
+    return response.data;
+  },
+
   logout: async () => {
     localStorage.removeItem('token');
     localStorage.removeItem('auth_token');
@@ -34,9 +44,12 @@ export const authService = {
       const response = await api.get('/users/me');
       return response.data?.data || null;
     } catch (error) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('auth_token');
-      return null;
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('auth_token');
+        return null;
+      }
+      throw error;
     }
   }
 };

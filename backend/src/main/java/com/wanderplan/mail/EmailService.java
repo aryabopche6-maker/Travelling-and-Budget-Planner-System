@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -74,6 +75,36 @@ public class EmailService {
             log.error("All email methods failed for invitation {} to {}", invitation.getId(), toEmail);
         }
         return sent;
+    }
+
+    @Async
+    public void sendPasswordResetEmail(String toEmail, String recipientName, String token) {
+        String resetUrl = frontendUrl.replaceAll("/+$", "") + "/reset-password?token=" + token;
+        String name = recipientName == null || recipientName.isBlank() ? "there" : escapeHtml(recipientName);
+        String htmlBody = "<!DOCTYPE html><html><body style='font-family:Arial,sans-serif;color:#1e293b'>"
+                + "<h2>Reset your WanderPlan password</h2><p>Hi " + name + ",</p>"
+                + "<p>Use the link below to choose a new password. This link expires in 30 minutes and can only be used once.</p>"
+                + "<p><a href='" + resetUrl + "'>Reset password</a></p>"
+                + "<p>If you did not request a password reset, you can ignore this email.</p></body></html>";
+        String subject = "Reset your WanderPlan password";
+        boolean sent = false;
+        if (mailUsername != null && !mailUsername.isBlank() && mailPassword != null && !mailPassword.isBlank()) {
+            sent = trySendViaPort(465, true, mailUsername, mailPassword, toEmail, subject, htmlBody);
+            if (!sent) {
+                sent = trySendViaPort(587, false, mailUsername, mailPassword, toEmail, subject, htmlBody);
+            }
+        }
+        if (!sent) {
+            sent = trySendViaWebhook(toEmail, subject, htmlBody);
+        }
+        if (!sent) {
+            log.error("Password reset email delivery failed");
+        }
+    }
+
+    private String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
     /**

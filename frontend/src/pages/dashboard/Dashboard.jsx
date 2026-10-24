@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Wallet, Compass, Plus, Activity, BellRing, Plane, Sparkles, TrendingUp, Clock, ArrowRight, Globe, Map, Calendar, Users, IndianRupee, Zap, Star, ChevronRight } from 'lucide-react';
+import { MapPin, Wallet, Compass, Plus, Activity, BellRing, Plane, Sparkles, TrendingUp, Clock, ArrowRight, Globe, Map, Calendar, Users, IndianRupee, Zap, Star, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageTransition from '../../components/common/PageTransition';
 import Reveal from '../../components/animations/Reveal';
@@ -89,14 +89,18 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [upcomingTrip, setUpcomingTrip] = useState(null);
   const [allTrips, setAllTrips] = useState([]);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const greeting = getGreeting();
 
   useEffect(() => {
     let isMounted = true;
     const loadDashboard = async () => {
+      setIsLoading(true);
       try {
         const trips = await tripService.getMyTrips(user?.id);
         if (isMounted) {
+          setLoadError('');
           if (trips && trips.length > 0) {
             setUpcomingTrip(trips[0]);
             setAllTrips(trips);
@@ -107,13 +111,18 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.error("Failed to load dashboard trips:", err);
+        if (isMounted) {
+          setUpcomingTrip(null);
+          setAllTrips([]);
+          setLoadError(err.response?.data?.message || 'Your trips could not be loaded. Check your connection and try again.');
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
     loadDashboard();
     return () => { isMounted = false; };
-  }, [user?.id]);
+  }, [user?.id, reloadKey]);
 
   const totalBudget = allTrips.reduce((sum, t) => sum + (t.budget || 0), 0);
   const totalSpent = allTrips.reduce((sum, t) => sum + (t.spent || 0), 0);
@@ -235,6 +244,22 @@ export default function Dashboard() {
           </motion.div>
         </div>
       </motion.div>
+
+      {loadError && (
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-red-500/20 bg-red-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <p role="alert" className="text-sm text-secondary">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReloadKey(key => key + 1)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-muted/30 bg-white px-4 py-2 text-sm font-medium text-charcoal hover:bg-bg"
+          >
+            <RefreshCw className="h-4 w-4" /> Try again
+          </button>
+        </div>
+      )}
 
       {/* ═══════════════════ MAIN GRID LAYOUT ═══════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

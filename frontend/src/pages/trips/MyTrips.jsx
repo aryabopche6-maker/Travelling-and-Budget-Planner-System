@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Filter, MapPin } from 'lucide-react';
+import { Plus, Search, MapPin, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Button from '../../components/common/Button';
 import TripCard from '../../components/common/TripCard';
 import PageTransition from '../../components/common/PageTransition';
 import { tripService } from '../../services/tripService';
-import { useAuth } from '../../context/AuthContext';
 
 
 
 export default function MyTrips() {
-  const { user } = useAuth();
   const [trips, setTrips] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [filter, setFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -22,13 +22,17 @@ export default function MyTrips() {
     
     const fetchTrips = async () => {
       setIsLoading(true);
+      setLoadError('');
       try {
-        const fetchedTrips = await tripService.getMyTrips(user?.id);
+        const fetchedTrips = await tripService.getMyTrips();
         if (isMounted) {
           setTrips(fetchedTrips);
         }
       } catch (error) {
         console.error("Failed to fetch trips:", error);
+        if (isMounted) {
+          setLoadError(error.response?.data?.message || 'Could not load your trips. Please try again.');
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -36,14 +40,12 @@ export default function MyTrips() {
       }
     };
     
-    if (user?.id) {
-      fetchTrips();
-    }
+    fetchTrips();
     
     return () => {
       isMounted = false;
     };
-  }, [user?.id]);
+  }, [reloadKey]);
 
   const filteredTrips = trips.filter(trip => {
     const matchesStatus = filter === 'All' || trip.status?.toLowerCase() === filter.toLowerCase();
@@ -103,6 +105,15 @@ export default function MyTrips() {
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="animate-pulse bg-bg rounded-2xl h-[340px] border border-muted/30" />
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="h-full min-h-64 flex flex-col items-center justify-center text-center p-8 bg-red-500/5 rounded-2xl border border-red-500/20">
+            <AlertTriangle className="w-10 h-10 text-red-500 mb-4" />
+            <h3 className="text-xl font-bold text-charcoal mb-2">Trips couldn’t be loaded</h3>
+            <p role="alert" className="text-secondary max-w-md">{loadError}</p>
+            <Button className="mt-5 gap-2" onClick={() => setReloadKey(key => key + 1)}>
+              <RefreshCw className="w-4 h-4" /> Try again
+            </Button>
           </div>
         ) : filteredTrips.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

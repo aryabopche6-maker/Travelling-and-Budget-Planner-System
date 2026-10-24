@@ -128,7 +128,7 @@ export default function GroupMembers() {
     try {
       setResendingId(invitationId);
       setErrorMsg('');
-      const result = await tripService.resendInvitation(trip.id, invitationId);
+      const result = await invitationService.resendInvitation(trip.id, invitationId);
       const invitation = result?.data || result;
       setLatestInviteEmail(invitation?.invitedEmail || email);
       setLatestInviteLink(invitation?.acceptUrl || '');

@@ -7,6 +7,8 @@ import { ToastProvider } from './context/ToastContext';
 import LandingPage from './pages/landing/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
 import SignupPage from './pages/auth/SignupPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import InvitationLanding from './pages/trips/InvitationLanding';
 
 // Layouts
@@ -37,16 +39,16 @@ import HiddenCosts from './pages/trips/HiddenCosts';
 import SmartAlternatives from './pages/trips/SmartAlternatives';
 
 const ProtectedRoute = ({ children }) => {
-  const { user, isLoading } = useAuth();
+  const { user, hasSession, isLoading } = useAuth();
   if (isLoading) return <div className="h-screen flex items-center justify-center text-teal">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user && !hasSession) return <Navigate to="/login" replace />;
   return children;
 };
 
 const PublicRoute = ({ children }) => {
-  const { user, isLoading } = useAuth();
+  const { user, hasSession, isLoading } = useAuth();
   if (isLoading) return <div className="h-screen flex items-center justify-center text-teal">Loading...</div>;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user || hasSession) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -59,6 +61,8 @@ function AppRoutes() {
       <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+      <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
       <Route path="/invitations/:action" element={<InvitationLanding />} />
       
       {/* Main App Layout */}

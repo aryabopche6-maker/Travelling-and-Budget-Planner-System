@@ -28,6 +28,7 @@ api.interceptors.response.use((response) => {
   if (error.response?.status === 401) {
     // Handle unauthorized (e.g., clear token, redirect to login)
     localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
     window.dispatchEvent(new Event('unauthorized'));
   }
   return Promise.reject(error);

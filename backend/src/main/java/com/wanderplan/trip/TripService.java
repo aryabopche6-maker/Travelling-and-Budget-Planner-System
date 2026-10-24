@@ -35,6 +35,9 @@ public class TripService {
     @Autowired
     private ItineraryDayRepository itineraryDayRepository;
 
+    @Autowired
+    private TripCleanupService tripCleanupService;
+
     @Transactional
     public TripResponse createTrip(Long userId, CreateTripRequest request) {
         User user = userRepository.findById(userId)
@@ -139,7 +142,7 @@ public class TripService {
     @Transactional
     public void deleteTrip(Long tripId, Long userId) {
         validateTripAdmin(tripId, userId);
-        tripRepository.deleteById(tripId);
+        tripCleanupService.deleteTripData(tripId);
     }
 
     public void validateTripMembership(Long tripId, Long userId) {

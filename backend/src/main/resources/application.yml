@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: ${PORT:8081}
   servlet:
     context-path: /
 
@@ -59,6 +59,8 @@ app:
     url: ${FRONTEND_URL:https://travelling-and-budget-planner-syste.vercel.app}
   invitation:
     expiry-days: 7
+  auth:
+    password-reset-expiry-minutes: ${PASSWORD_RESET_EXPIRY_MINUTES:30}
   cors:
     allowed-origins: ${CORS_ORIGIN:https://travelling-and-budget-planner-syste.vercel.app,http://localhost:5173}
   external:
