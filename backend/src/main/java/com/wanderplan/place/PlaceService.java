@@ -232,9 +232,10 @@ public class PlaceService {
             log.warn("OSM places search failed for {}: {}", searchArea, e.getMessage());
         }
 
-        if (places.isEmpty() && !destinationWideSearch) {
+        if (places.isEmpty()) {
             try {
-                providerResponded |= fetchNominatimPlaces(places, searchArea, destination, centerLat, centerLon, effectiveRadiusKm);
+                providerResponded |= fetchNominatimPlaces(
+                        places, searchArea, destination, centerLat, centerLon, effectiveRadiusKm, destinationWideSearch);
             } catch (Exception e) {
                 log.warn("Nominatim places search failed for {}: {}", searchArea, e.getMessage());
             }
@@ -452,7 +453,7 @@ public class PlaceService {
         return fallback;
     }
 
-    private boolean fetchNominatimPlaces(List<PlaceResponse> places, String searchArea, String destination, double centerLat, double centerLon, int radiusKm) {
+    private boolean fetchNominatimPlaces(List<PlaceResponse> places, String searchArea, String destination, double centerLat, double centerLon, int radiusKm, boolean destinationWideSearch) {
         boolean providerResponded = false;
         String[] queries = new String[]{
             "attractions in " + searchArea + " " + destination,
@@ -479,19 +480,19 @@ public class PlaceService {
                         double placeLon = item.path("lon").asDouble(Double.NaN);
                         if (!Double.isFinite(placeLat) || !Double.isFinite(placeLon)
                                 || placeLat < -90 || placeLat > 90 || placeLon < -180 || placeLon > 180) continue;
-                        double dist = haversineKm(centerLat, centerLon, placeLat, placeLon);
-
-                        if (dist > radiusKm) continue;
+                        Double dist = destinationWideSearch ? null : haversineKm(centerLat, centerLon, placeLat, placeLon);
+                        if (dist != null && dist > radiusKm) continue;
 
                         String type = item.path("type").asText("tourism");
                         String category = type.contains("museum") ? "Museums & Art" : (type.contains("park") ? "Parks & Nature" : "Sightseeing & Culture");
+                        String displayName = item.path("display_name").asText(searchArea);
 
                         places.add(PlaceResponse.builder()
                                 .id("nom-" + item.path("place_id").asText())
                                 .name(name)
                                 .category(category)
                                 .rating(null)
-                                .location(String.format("%s (%.1f km away)", item.path("display_name").asText(searchArea), dist))
+                                .location(dist == null ? displayName : String.format("%s (%.1f km away)", displayName, dist))
                                 .distanceKm(dist)
                                 .estimatedCost(null)
                                 .duration(null)

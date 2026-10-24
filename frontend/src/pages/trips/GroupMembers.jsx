@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTrip } from '../../context/TripContext';
 import { 
-  Users, Mail, UserMinus, Shield, Crown, Clock, X, Copy, Check, 
+  Users, Mail, UserMinus, Shield, Crown, Clock, X, Copy, Check, CheckCircle2,
   MessageCircle, RefreshCw, Sparkles, UserPlus, Send, Share2, AlertCircle, HeartHandshake
 } from 'lucide-react';
 import Button from '../../components/common/Button';
