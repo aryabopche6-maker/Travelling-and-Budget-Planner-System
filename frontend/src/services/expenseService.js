@@ -61,4 +61,9 @@ export const expenseService = {
     const response = await api.delete(`/trips/${tripId}/expenses/${expenseId}`);
     return response.data;
   },
+
+  sendPaymentReminder: async (tripId, memberId) => {
+    const response = await api.post(`/trips/${tripId}/expenses/reminders/${memberId}`);
+    return response.data?.data;
+  },
 };

@@ -44,7 +44,7 @@ export const authService = {
       const response = await api.get('/users/me');
       return response.data?.data || null;
     } catch (error) {
-      if (error.response?.status === 401) {
+      if ([401, 403].includes(error.response?.status)) {
         localStorage.removeItem('token');
         localStorage.removeItem('auth_token');
         return null;

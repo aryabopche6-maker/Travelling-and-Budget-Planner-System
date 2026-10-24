@@ -4,6 +4,7 @@ import com.wanderplan.exception.BadRequestException;
 import com.wanderplan.exception.ResourceNotFoundException;
 import com.wanderplan.member.TripMember;
 import com.wanderplan.member.TripMemberRepository;
+import com.wanderplan.notification.NotificationService;
 import com.wanderplan.trip.Trip;
 import com.wanderplan.trip.TripRepository;
 import com.wanderplan.trip.TripService;
@@ -50,6 +51,9 @@ public class ExpenseService {
 
     @Autowired
     private TripService tripService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Transactional
     public ExpenseResponse addExpense(Long tripId, Long userId, ExpenseRequest request) {
@@ -212,6 +216,38 @@ public class ExpenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
         validateExpenseTrip(expense, tripId);
         expenseRepository.delete(expense);
+    }
+
+    @Transactional
+    public double sendPaymentReminder(Long tripId, Long memberId, Long userId) {
+        tripService.validateTripMembership(tripId, userId);
+        tripService.validateTripMembership(tripId, memberId);
+        if (userId.equals(memberId)) {
+            throw new BadRequestException("You cannot send a payment reminder to yourself");
+        }
+
+        BigDecimal outstanding = expenseRepository.findByTripId(tripId).stream()
+                .filter(expense -> userId.equals(expense.getPaidBy()))
+                .filter(expense -> !"SETTLED".equalsIgnoreCase(expense.getStatus())
+                        && !"REJECTED".equalsIgnoreCase(expense.getStatus()))
+                .flatMap(expense -> expense.getSplits().stream())
+                .filter(split -> memberId.equals(split.getUserId()))
+                .filter(split -> !Boolean.TRUE.equals(split.getIsPaid()))
+                .map(split -> BigDecimal.valueOf(split.getAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (outstanding.signum() <= 0) {
+            throw new BadRequestException("This member has no outstanding expenses payable to you");
+        }
+
+        String payerName = userRepository.findById(userId)
+                .map(User::getName)
+                .orElse("a trip member");
+        String message = "You have an outstanding trip expense of ₹" + outstanding.toPlainString()
+                + " payable to " + payerName + ".";
+        notificationService.createNotification(memberId, "Payment reminder", message, "EXPENSE");
+        return outstanding.doubleValue();
     }
 
     private void validateExpenseTrip(Expense expense, Long tripId) {

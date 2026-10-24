@@ -2,6 +2,7 @@ package com.wanderplan.config;
 
 import com.wanderplan.security.CustomUserDetailsService;
 import com.wanderplan.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -84,6 +85,9 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .headers(headers -> headers.frameOptions(frame -> frame.disable())) // For H2 console
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
+                    (request, response, authException) ->
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication is required")))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/api/invitations/verify", "/api/invitations/verify/**", "/api/invitations/decline", "/api/invitations/decline/**", "/h2-console/**").permitAll()
                 .anyRequest().authenticated()

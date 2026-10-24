@@ -2,6 +2,7 @@ package com.wanderplan.trip;
 
 import com.wanderplan.exception.ForbiddenException;
 import com.wanderplan.exception.ResourceNotFoundException;
+import com.wanderplan.expense.ExpenseRepository;
 import com.wanderplan.itinerary.ItineraryDayRepository;
 import com.wanderplan.member.MemberResponse;
 import com.wanderplan.member.TripMember;
@@ -37,6 +38,9 @@ public class TripService {
 
     @Autowired
     private TripCleanupService tripCleanupService;
+
+    @Autowired
+    private ExpenseRepository expenseRepository;
 
     @Transactional
     public TripResponse createTrip(Long userId, CreateTripRequest request) {
@@ -185,7 +189,7 @@ public class TripService {
                 .endDate(trip.getEndDate())
                 .numberOfTravelers(trip.getNumberOfTravelers())
                 .budget(trip.getBudget())
-                .spent(0.0) // Calculated dynamically in budget service
+                .spent(expenseRepository.sumNonRejectedAmountByTripId(trip.getId()))
                 .travelMode(trip.getTravelMode())
                 .travelPace(trip.getTravelPace())
                 .travelStyle(trip.getTravelStyle())

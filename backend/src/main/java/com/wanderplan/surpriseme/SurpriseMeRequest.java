@@ -1,14 +1,22 @@
 package com.wanderplan.surpriseme;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 
 import java.util.List;
 
 public class SurpriseMeRequest {
     private String startingLocation;
     @NotNull(message = "Budget is required")
+    @Positive(message = "Budget must be greater than zero")
     private Double budget;
+    @Min(value = 1, message = "Trip duration must be at least one day")
+    @Max(value = 16, message = "Trip duration cannot exceed 16 days")
     private Integer days;
+    @Min(value = 1, message = "At least one traveler is required")
+    @Max(value = 20, message = "Group size cannot exceed 20 travelers")
     private Integer travelers;
     private List<String> interests;
     private String travelPace;

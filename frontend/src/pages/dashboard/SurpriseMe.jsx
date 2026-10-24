@@ -10,7 +10,7 @@ export default function SurpriseMe() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ startingLocation: '', budget: '', days: '', travelers: '' });
+  const [form, setForm] = useState({ startingLocation: '', budget: '', days: '', travelers: '', travelPace: 'balanced' });
   const [interests, setInterests] = useState([]);
 
   const handleGenerate = async (e) => {
@@ -23,7 +23,8 @@ export default function SurpriseMe() {
         budget: Number(form.budget),
         days: Number(form.days),
         travelers: Number(form.travelers),
-        interests
+        interests,
+        travelPace: form.travelPace
       });
       const recommendation = response.data?.data;
       if (!recommendation?.suggestedDestination) {
@@ -35,6 +36,8 @@ export default function SurpriseMe() {
         image: recommendation.imageUrl,
         reason: recommendation.matchReason,
         estimatedBudget: `₹${Number(recommendation.estimatedTotalBudget || 0).toLocaleString('en-IN')} estimated total`,
+        travelMode: recommendation.recommendedTravelMode,
+        hotelTier: recommendation.recommendedHotelTier,
         suggestedActivities: recommendation.suggestedActivities || []
       });
     } catch (requestError) {
@@ -73,10 +76,10 @@ export default function SurpriseMe() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-charcoal mb-1">Total Budget</label>
+                <label className="block text-sm font-medium text-charcoal mb-1">Total Budget for Everyone</label>
                 <div className="relative">
                   <Wallet className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input type="number" min="1" required placeholder="Maximum budget (₹)" className="pl-10" value={form.budget} onChange={(event) => setForm({ ...form, budget: event.target.value })} />
+                  <Input type="number" min="1" required placeholder="Maximum group budget (₹)" className="pl-10" value={form.budget} onChange={(event) => setForm({ ...form, budget: event.target.value })} />
                 </div>
               </div>
               <div>
@@ -90,8 +93,21 @@ export default function SurpriseMe() {
                 <label className="block text-sm font-medium text-charcoal mb-1">Travelers</label>
                 <div className="relative">
                   <Users className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input type="number" min="1" required placeholder="Number of people" className="pl-10" value={form.travelers} onChange={(event) => setForm({ ...form, travelers: event.target.value })} />
+                  <Input type="number" min="1" max="20" required placeholder="Number of people" className="pl-10" value={form.travelers} onChange={(event) => setForm({ ...form, travelers: event.target.value })} />
                 </div>
+              </div>
+              <div>
+                <label htmlFor="travel-pace" className="block text-sm font-medium text-charcoal mb-1">Trip Style</label>
+                <select
+                  id="travel-pace"
+                  className="w-full h-11 rounded-xl border border-muted/30 bg-white px-3 text-charcoal focus:border-teal focus:outline-none"
+                  value={form.travelPace}
+                  onChange={(event) => setForm({ ...form, travelPace: event.target.value })}
+                >
+                  <option value="relaxed">Relaxed</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="active">Active</option>
+                </select>
               </div>
             </div>
 
@@ -185,6 +201,13 @@ export default function SurpriseMe() {
               <p className="text-muted leading-relaxed bg-bg p-4 rounded-xl border border-muted/30">
                 {result.reason}
               </p>
+              {(result.travelMode || result.hotelTier) && (
+                <p className="text-sm text-muted mt-3">
+                  {result.travelMode && <span>Travel: {result.travelMode}</span>}
+                  {result.travelMode && result.hotelTier && <span> · </span>}
+                  {result.hotelTier && <span>Stay: {result.hotelTier}</span>}
+                </p>
+              )}
             </motion.div>
 
             <motion.div

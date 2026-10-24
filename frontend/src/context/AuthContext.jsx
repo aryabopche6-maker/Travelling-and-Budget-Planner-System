@@ -15,6 +15,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const currentUser = await authService.getCurrentUser();
         setUser(currentUser);
+        setHasSession(Boolean(currentUser));
       } catch (error) {
         console.error("Auth check failed:", error);
       } finally {

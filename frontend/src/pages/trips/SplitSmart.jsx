@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTrip } from '../../context/TripContext';
 import { useAuth } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,7 +7,7 @@ import {
   ArrowUpRight, ArrowDownLeft, Users, Wallet, Filter, Trash2,
   ChevronDown, IndianRupee, Upload, FileImage, Eye, Loader2,
   History, Bell, BarChart3, Download, PieChart as PieChartIcon,
-  Sparkles, MessageSquare, CheckCircle2, XCircle, Search, TrendingUp
+  Sparkles, CheckCircle2, XCircle, Search, TrendingUp
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,7 +29,6 @@ import AnimatedNumber from '../../components/animations/AnimatedNumber';
 import { expenseService } from '../../services/expenseService';
 
 // ─── helpers & theme palette ────────────────────────────────────────────────
-const SPLIT_TYPES = ['EQUAL', 'EXACT', 'PERCENTAGE', 'SELECTED'];
 const STATUS_COLORS = {
   ACCEPTED:  'bg-emerald-50 text-emerald-700 border-emerald-200/80 shadow-emerald-500/10',
   PENDING:   'bg-sky-50 text-sky-700 border-sky-200/80 shadow-sky-500/10',
@@ -87,68 +86,6 @@ const CATEGORY_THEME = {
     emoji: '✨'
   }
 };
-
-function seed(members) {
-  const p1 = members[0] || { id: '1', name: 'You' };
-  const p2 = members[1] || { id: '2', name: 'Alex' };
-  return [
-    {
-      id: 'e1',
-      title: 'Dinner at Seaside',
-      amount: 4500,
-      category: 'Food',
-      paidById: p1.id,
-      paidByName: p1.name,
-      date: '2024-05-20',
-      status: 'ACCEPTED',
-      splitType: 'EQUAL',
-      participants: members.map(m => m.id),
-      disputeReason: '',
-      history: [
-        { action: 'CREATED', actorName: p1.name, timestamp: '2024-05-20T19:30:00Z', details: 'Added dinner expense' },
-        { action: 'ACCEPTED', actorName: p2.name, timestamp: '2024-05-20T21:00:00Z', details: 'Approved equal share' }
-      ]
-    },
-    {
-      id: 'e2',
-      title: 'Taxi to Hotel',
-      amount: 1200,
-      category: 'Transport',
-      paidById: p2.id,
-      paidByName: p2.name,
-      date: '2024-05-21',
-      status: 'PENDING',
-      splitType: 'EQUAL',
-      participants: members.map(m => m.id),
-      disputeReason: '',
-      history: [
-        { action: 'CREATED', actorName: p2.name, timestamp: '2024-05-21T10:15:00Z', details: 'Cab from airport to resort' }
-      ]
-    },
-    {
-      id: 'e3',
-      title: 'Scuba Diving Gear',
-      amount: 8000,
-      category: 'Activities',
-      paidById: p2.id,
-      paidByName: p2.name,
-      date: '2024-05-21',
-      status: 'DISPUTED',
-      splitType: 'EXACT',
-      participants: members.slice(0, 2).map(m => m.id),
-      disputeReason: 'I did not rent the gear, only Alex and Mike used it.',
-      disputeCategory: 'Did not participate',
-      disputeEvidence: 'Check rental agreement photo ticket #4092.',
-      disputeResponses: [
-        { actorName: p2.name, text: 'Looking into the gear log now, will update splits if needed.', timestamp: '2024-05-21T14:45:00Z' }
-      ],
-      history: [
-        { action: 'CREATED', actorName: p2.name, timestamp: '2024-05-21T11:00:00Z', details: 'Scuba diving equipment hire' },
-        { action: 'DISPUTED', actorName: p1.name, timestamp: '2024-05-21T13:20:00Z', details: 'Disputed: Did not participate' }
-      ]
-    },
-  ];
-}
 
 // ─── Smart Settle Up: Min Cash Flow Algorithm ────────────────────────────────
 function computeMinTransactions(expenses, members) {
@@ -308,7 +245,7 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
     amount: '',
     category: 'Food',
     paidById: currentUser?.id == null ? '' : String(currentUser.id),
-    splitType: 'EQUAL', // EQUAL, EXACT, PERCENTAGE, SELECTED
+    splitType: 'EQUAL',
     participants: members.map(m => String(m.id)),
     customSplits: {}, // { [memberId]: amount or percentage }
     date: new Date().toISOString().split('T')[0],
@@ -383,35 +320,60 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
     if (!form.amount || isNaN(totalAmount) || totalAmount <= 0) return setError('Enter a valid amount.');
     if (form.participants.length === 0) return setError('Select at least one participant.');
 
-    // Build splits based on splitType
+    // The API accepts only EQUAL and CUSTOM. Convert the UI's custom methods
+    // to exact cent amounts so server-side reconciliation succeeds.
     let splits = [];
     if (form.splitType === 'EQUAL' || form.splitType === 'SELECTED') {
-      const share = Math.round(totalAmount / form.participants.length);
-      splits = form.participants.map(pid => {
+      const totalCents = Math.round(totalAmount * 100);
+      const shareCents = Math.floor(totalCents / form.participants.length);
+      let allocatedCents = 0;
+      splits = form.participants.map((pid, index) => {
         const m = members.find(x => x.id === pid);
-        return { userId: pid, userName: m?.name || 'Member', amount: share };
+        const cents = index === form.participants.length - 1
+          ? totalCents - allocatedCents
+          : shareCents;
+        allocatedCents += cents;
+        return { userId: pid, userName: m?.name || 'Member', amount: cents / 100 };
       });
     } else if (form.splitType === 'EXACT') {
-      let sum = 0;
+      if (form.participants.some((pid) => {
+        const share = Number(form.customSplits[pid]);
+        return !Number.isFinite(share) || share < 0;
+      })) {
+        return setError('Custom split amounts must be non-negative numbers.');
+      }
+      let sumCents = 0;
       splits = form.participants.map(pid => {
         const m = members.find(x => x.id === pid);
-        const amt = Number(form.customSplits[pid]) || 0;
-        sum += amt;
-        return { userId: pid, userName: m?.name || 'Member', amount: amt };
+        const share = Number(form.customSplits[pid]);
+        const cents = Math.round(share * 100);
+        sumCents += cents;
+        return { userId: pid, userName: m?.name || 'Member', amount: cents / 100 };
       });
-      if (Math.abs(sum - totalAmount) > 1) {
-        return setError(`Exact split sum (₹${sum}) must equal total expense amount (₹${totalAmount}).`);
+      if (sumCents !== Math.round(totalAmount * 100)) {
+        return setError('Exact split amounts must add up to the expense amount to the nearest paise.');
       }
     } else if (form.splitType === 'PERCENTAGE') {
+      if (form.participants.some((pid) => {
+        const percentage = Number(form.customSplits[pid]);
+        return !Number.isFinite(percentage) || percentage < 0;
+      })) {
+        return setError('Percentages must be non-negative numbers.');
+      }
       let pctSum = 0;
-      splits = form.participants.map(pid => {
+      let allocatedCents = 0;
+      splits = form.participants.map((pid, index) => {
         const m = members.find(x => x.id === pid);
-        const pct = Number(form.customSplits[pid]) || 0;
+        const pct = Number(form.customSplits[pid]);
         pctSum += pct;
-        const amt = Math.round((totalAmount * pct) / 100);
-        return { userId: pid, userName: m?.name || 'Member', amount: amt };
+        const totalCents = Math.round(totalAmount * 100);
+        const cents = index === form.participants.length - 1
+          ? totalCents - allocatedCents
+          : Math.floor((totalCents * pct) / 100);
+        allocatedCents += cents;
+        return { userId: pid, userName: m?.name || 'Member', amount: cents / 100 };
       });
-      if (Math.abs(pctSum - 100) > 0.5) {
+      if (Math.abs(pctSum - 100) > 0.01) {
         return setError(`Percentages must add up to 100% (currently ${pctSum}%).`);
       }
     }
@@ -927,28 +889,17 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
   );
 }
 
-const DISPUTE_CATEGORIES = [
-  'Incorrect Amount',
-  'Did not participate',
-  'Duplicate Expense',
-  'Already paid my share',
-  'Other'
-];
-
 function DisputeModal({ expense, onSubmit, onClose }) {
-  const [category, setCategory] = useState(DISPUTE_CATEGORIES[0]);
   const [reason, setReason] = useState('');
-  const [evidence, setEvidence] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!reason.trim()) return;
-    onSubmit({
-      disputeReason: reason.trim(),
-      disputeCategory: category,
-      disputeEvidence: evidence.trim() || undefined
-    });
-    onClose();
+    if (!reason.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    const saved = await onSubmit({ disputeReason: reason.trim() });
+    setIsSubmitting(false);
+    if (saved) onClose();
   };
 
   return (
@@ -980,27 +931,7 @@ function DisputeModal({ expense, onSubmit, onClose }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">Dispute Category</label>
-            <div className="flex flex-wrap gap-2">
-              {DISPUTE_CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                    category === cat
-                      ? 'bg-golden text-white shadow-sm'
-                      : 'bg-bg text-muted hover:text-charcoal border border-muted/30'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-charcoal mb-1.5">Reason & Explanation</label>
+            <label className="block text-sm font-semibold text-charcoal mb-1.5">Dispute reason</label>
             <textarea
               rows={3}
               placeholder="Explain clearly why this expense or split is incorrect…"
@@ -1011,27 +942,14 @@ function DisputeModal({ expense, onSubmit, onClose }) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-charcoal mb-1.5">
-              Evidence / Note <span className="text-muted font-normal text-xs">(optional receipt number, message, or reference)</span>
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. See receipt #104 or our WhatsApp chat confirmation"
-              value={evidence}
-              onChange={e => setEvidence(e.target.value)}
-              className="w-full px-4 py-2.5 border border-muted/30 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-golden text-charcoal placeholder:text-muted transition text-sm"
-            />
-          </div>
-
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
             <Button
               type="submit"
-              disabled={!reason.trim()}
+              disabled={!reason.trim() || isSubmitting}
               className="flex-1 bg-golden hover:bg-yellow-600 text-white disabled:opacity-50"
             >
-              Submit Dispute
+              {isSubmitting ? 'Submitting…' : 'Submit Dispute'}
             </Button>
           </div>
         </form>
@@ -1300,7 +1218,7 @@ function ExpenseHistoryModal({ expense, onClose }) {
               <History className="w-4 h-4 text-purple-500" />
             </div>
             <div>
-              <h3 className="font-bold text-charcoal">Expense Activity History</h3>
+              <h3 className="font-bold text-charcoal">Expense Record</h3>
               <p className="text-xs text-muted truncate max-w-[200px]">{expense.title}</p>
             </div>
           </div>
@@ -1367,7 +1285,6 @@ const mapExpense = (expense) => ({
   history: expense.createdAt
     ? [{ action: 'CREATED', actorName: expense.paidByName || 'Trip member', timestamp: expense.createdAt }]
     : [],
-  disputeResponses: []
 });
 
 export default function SplitSmart() {
@@ -1390,8 +1307,7 @@ export default function SplitSmart() {
   const [historyTarget, setHistoryTarget] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [reminderToast, setReminderToast] = useState(null);
-  const [disputeResponseText, setDisputeResponseText] = useState('');
-  const [activeDisputeResponseId, setActiveDisputeResponseId] = useState(null);
+  const [sendingReminderTo, setSendingReminderTo] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -1497,37 +1413,21 @@ export default function SplitSmart() {
   };
 
   // ── Payment Reminder ─────────────────────────────────────────────────────
-  const sendReminder = (member) => {
-    setReminderToast(`🔔 Friendly payment reminder sent to ${member.name} for ₹${member.amount.toLocaleString()}!`);
-    setTimeout(() => {
-      setReminderToast(null);
-    }, 4500);
-  };
-
-  // ── Dispute Response Submission ──────────────────────────────────────────
-  const handleAddDisputeResponse = (expenseId) => {
-    if (!disputeResponseText.trim()) return;
-    setExpenses(es => es.map(e => {
-      if (e.id !== expenseId) return e;
-      const newResponse = {
-        actorName: currentUserName,
-        text: disputeResponseText.trim(),
-        timestamp: new Date().toISOString()
-      };
-      const historyEntry = {
-        action: 'DISPUTE_NOTE',
-        actorName: currentUserName,
-        timestamp: new Date().toISOString(),
-        details: `Dispute note: "${disputeResponseText.trim()}"`
-      };
-      return {
-        ...e,
-        disputeResponses: [...(e.disputeResponses || []), newResponse],
-        history: [...(e.history || []), historyEntry]
-      };
-    }));
-    setDisputeResponseText('');
-    setActiveDisputeResponseId(null);
+  const sendReminder = async (member) => {
+    if (!trip?.id || sendingReminderTo) return;
+    try {
+      setExpenseError('');
+      setSendingReminderTo(member.id);
+      const amount = await expenseService.sendPaymentReminder(trip.id, member.id);
+      setReminderToast(
+        `Reminder saved to ${member.name}'s in-app notifications for ₹${Number(amount).toLocaleString()}.`
+      );
+      setTimeout(() => setReminderToast(null), 4500);
+    } catch (error) {
+      setExpenseError(error.response?.data?.message || 'Could not save the payment reminder.');
+    } finally {
+      setSendingReminderTo(null);
+    }
   };
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -1558,12 +1458,7 @@ export default function SplitSmart() {
       if (status === 'ACCEPTED') {
         savedExpense = await expenseService.approveExpense(trip.id, id);
       } else if (status === 'DISPUTED') {
-        const reason = [
-          extra.disputeReason,
-          extra.disputeCategory && `Category: ${extra.disputeCategory}`,
-          extra.disputeEvidence && `Evidence: ${extra.disputeEvidence}`
-        ].filter(Boolean).join(' | ');
-        savedExpense = await expenseService.disputeExpense(trip.id, id, reason);
+        savedExpense = await expenseService.disputeExpense(trip.id, id, extra.disputeReason);
       } else if (status === 'REJECTED') {
         savedExpense = await expenseService.rejectExpense(trip.id, id);
       } else if (status === 'SETTLED') {
@@ -1573,9 +1468,11 @@ export default function SplitSmart() {
       }
       const mappedExpense = mapExpense(savedExpense);
       setExpenses((previous) => previous.map((expense) => expense.id === mappedExpense.id ? mappedExpense : expense));
+      return true;
     } catch (error) {
       console.error('Failed to update expense status:', error);
       setExpenseError(error.response?.data?.message || error.message || 'Could not update this expense.');
+      return false;
     }
   };
 
@@ -1598,7 +1495,7 @@ export default function SplitSmart() {
       paidBy: Number(expense.paidById),
       date: expense.date,
       category: expense.category,
-      splitType: expense.splitType,
+      splitType: expense.splitType === 'EQUAL' ? 'EQUAL' : 'CUSTOM',
       proofUrl: expense.proofUrl,
       splits: expense.splits.map((split) => ({
         userId: Number(split.userId),
@@ -1645,6 +1542,7 @@ export default function SplitSmart() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
+            role="status"
             className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-charcoal text-white rounded-2xl shadow-2xl border border-muted/20 text-sm font-medium"
           >
             <Bell className="w-5 h-5 text-teal shrink-0 animate-bounce" />
@@ -2049,9 +1947,12 @@ export default function SplitSmart() {
               )}
 
               {filtered.map((exp, index) => {
-                const myShare = exp.participants.includes(currentUserId)
-                  ? Math.round(exp.amount / exp.participants.length)
-                  : 0;
+                const mySplit = exp.splits?.find((split) => String(split.userId) === currentUserId);
+                const myShare = mySplit
+                  ? Number(mySplit.amount) || 0
+                  : exp.participants.includes(currentUserId) && exp.participants.length > 0
+                    ? exp.amount / exp.participants.length
+                    : 0;
                 const iPaid = exp.paidById === currentUserId;
                 const iParticipate = exp.participants.includes(currentUserId);
                 const canApprove = exp.status === 'PENDING' && !iPaid && iParticipate;
@@ -2127,7 +2028,7 @@ export default function SplitSmart() {
                               whileTap={{ scale: 0.9 }}
                               onClick={() => setHistoryTarget(exp)}
                               className="w-8 h-8 rounded-full bg-slate-50 hover:bg-teal-50 border border-slate-200 flex items-center justify-center transition-colors text-muted hover:text-teal-700 shadow-2xs"
-                              title="View Activity History"
+                              title="View Expense Record"
                             >
                               <History className="w-3.5 h-3.5" />
                             </motion.button>
@@ -2146,7 +2047,7 @@ export default function SplitSmart() {
                         </div>
                       </div>
 
-                      {/* Disputed section with Category, Evidence & Threaded Responses */}
+                      {/* Dispute details and available actions */}
                       {exp.status === 'DISPUTED' && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
@@ -2157,72 +2058,15 @@ export default function SplitSmart() {
                             <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                             <div className="space-y-1 flex-1">
                               <p className="text-xs font-black text-amber-900 uppercase tracking-wider">
-                                Active Dispute {exp.disputeCategory ? `· ${exp.disputeCategory}` : ''}
+                                Active Dispute
                               </p>
                               <p className="text-xs text-amber-950 font-medium">{exp.disputeReason}</p>
-                              {exp.disputeEvidence && (
-                                <p className="text-[11px] text-amber-800 bg-white/80 p-2 rounded-xl border border-amber-200 font-medium mt-1">
-                                  📎 Evidence: {exp.disputeEvidence}
-                                </p>
-                              )}
                             </div>
                           </div>
 
-                          {/* Threaded dispute responses */}
-                          {exp.disputeResponses && exp.disputeResponses.length > 0 && (
-                            <div className="pl-3 border-l-2 border-amber-300 space-y-2">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Responses</p>
-                              {exp.disputeResponses.map((resp, rIdx) => (
-                                <div key={rIdx} className="bg-white p-2.5 rounded-xl border border-slate-200 text-xs">
-                                  <div className="flex items-center justify-between font-bold text-charcoal mb-0.5">
-                                    <span>{resp.actorName}</span>
-                                    <span className="text-[10px] text-muted font-normal">
-                                      {new Date(resp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                  </div>
-                                  <p className="text-slate-600">{resp.text}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Add response form */}
-                          {activeDisputeResponseId === exp.id ? (
-                            <div className="flex gap-2 pt-1">
-                              <input
-                                type="text"
-                                placeholder="Write a response or resolution…"
-                                value={disputeResponseText}
-                                onChange={(e) => setDisputeResponseText(e.target.value)}
-                                className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 text-charcoal font-medium"
-                              />
-                              <Button
-                                size="sm"
-                                onClick={() => handleAddDisputeResponse(exp.id)}
-                                className="bg-amber-600 text-white hover:bg-amber-700 text-xs px-3 font-bold"
-                              >
-                                Post
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setActiveDisputeResponseId(null)}
-                                className="text-xs px-2"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setActiveDisputeResponseId(exp.id);
-                                setDisputeResponseText('');
-                              }}
-                              className="text-xs font-bold text-amber-800 hover:underline flex items-center gap-1 pt-1"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" /> Reply to dispute
-                            </button>
-                          )}
+                          <p className="text-xs text-amber-900 bg-white/80 border border-amber-200 rounded-xl p-3">
+                            Dispute replies are unavailable because replies cannot currently be saved or shared.
+                          </p>
 
                           {isTripAdmin && (
                             <div className="pt-2 flex gap-3 justify-end border-t border-amber-200/80">
@@ -2401,7 +2245,10 @@ export default function SplitSmart() {
                         </span>
                         {d.direction === 'owed' && (
                           <motion.button whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.95 }}
-                            onClick={() => sendReminder(d)} title={`Remind ${d.name}`}
+                            onClick={() => sendReminder(d)}
+                            disabled={sendingReminderTo !== null}
+                            title={`Send an in-app payment reminder to ${d.name}`}
+                            aria-label={`Send an in-app payment reminder to ${d.name}`}
                             className="p-1 rounded-lg bg-teal-100 hover:bg-teal-600 hover:text-white text-teal-800 transition"
                           ><Bell className="w-3 h-3" /></motion.button>
                         )}

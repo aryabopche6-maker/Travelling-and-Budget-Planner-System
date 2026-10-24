@@ -3,6 +3,7 @@ package com.wanderplan.expense;
 import com.wanderplan.exception.BadRequestException;
 import com.wanderplan.member.TripMember;
 import com.wanderplan.member.TripMemberRepository;
+import com.wanderplan.notification.NotificationService;
 import com.wanderplan.trip.Trip;
 import com.wanderplan.trip.TripRepository;
 import com.wanderplan.trip.TripService;
@@ -18,7 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,6 +30,7 @@ class ExpenseServiceTest {
     @Mock private TripMemberRepository tripMemberRepository;
     @Mock private UserRepository userRepository;
     @Mock private TripService tripService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks private ExpenseService expenseService;
 
@@ -77,5 +79,40 @@ class ExpenseServiceTest {
 
         assertThrows(BadRequestException.class, () -> expenseService.addExpense(9L, 2L, request));
         verify(expenseRepository, never()).save(any(Expense.class));
+    }
+
+    @Test
+    void paymentReminderCreatesNotificationForOutstandingMemberShare() {
+        Trip trip = Trip.builder().id(9L).destination("Rome").build();
+        Expense expense = Expense.builder()
+                .trip(trip)
+                .paidBy(1L)
+                .status("PENDING")
+                .splits(List.of(
+                        ExpenseSplit.builder().userId(1L).amount(40.25).isPaid(true).build(),
+                        ExpenseSplit.builder().userId(2L).amount(40.25).isPaid(false).build()))
+                .build();
+        when(expenseRepository.findByTripId(9L)).thenReturn(List.of(expense));
+
+        double amount = expenseService.sendPaymentReminder(9L, 2L, 1L);
+
+        assertEquals(40.25, amount);
+        verify(tripService).validateTripMembership(9L, 1L);
+        verify(tripService).validateTripMembership(9L, 2L);
+        verify(notificationService).createNotification(
+                eq(2L), eq("Payment reminder"), contains("₹40.25"), eq("EXPENSE"));
+    }
+
+    @Test
+    void paymentReminderRequiresAnOutstandingShare() {
+        Expense expense = Expense.builder()
+                .paidBy(1L)
+                .status("SETTLED")
+                .splits(List.of(ExpenseSplit.builder().userId(2L).amount(40.0).isPaid(false).build()))
+                .build();
+        when(expenseRepository.findByTripId(9L)).thenReturn(List.of(expense));
+
+        assertThrows(BadRequestException.class, () -> expenseService.sendPaymentReminder(9L, 2L, 1L));
+        verify(notificationService, never()).createNotification(anyLong(), anyString(), anyString(), anyString());
     }
 }

@@ -86,6 +86,15 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success("Expense deleted"));
     }
 
+    @PostMapping("/reminders/{memberId}")
+    public ResponseEntity<ApiResponse<Double>> sendPaymentReminder(
+            @PathVariable Long tripId,
+            @PathVariable Long memberId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        double amount = expenseService.sendPaymentReminder(tripId, memberId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Payment reminder saved", amount));
+    }
+
     @PostMapping("/upload-proof")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadProof(
             @PathVariable Long tripId,
