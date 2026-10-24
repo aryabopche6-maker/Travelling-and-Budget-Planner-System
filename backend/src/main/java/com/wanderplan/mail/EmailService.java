@@ -50,46 +50,69 @@ public class EmailService {
 
         String effectiveUsername = (mailUsername != null && !mailUsername.isBlank()) 
                 ? mailUsername 
-                : System.getenv("MAIL_USERNAME");
+                : (System.getenv("MAIL_USERNAME") != null && !System.getenv("MAIL_USERNAME").isBlank() 
+                    ? System.getenv("MAIL_USERNAME") 
+                    : "aryabopche6@gmail.com");
+
         String effectivePassword = (mailPassword != null && !mailPassword.isBlank()) 
                 ? mailPassword 
-                : System.getenv("MAIL_PASSWORD");
+                : (System.getenv("MAIL_PASSWORD") != null && !System.getenv("MAIL_PASSWORD").isBlank() 
+                    ? System.getenv("MAIL_PASSWORD") 
+                    : "xywkkpaedvrielbf");
 
-        if (effectiveUsername == null || effectiveUsername.isBlank()
-                || effectivePassword == null || effectivePassword.isBlank()) {
-            log.error("Invitation email was not sent because SMTP is not configured. Set MAIL_USERNAME and MAIL_PASSWORD.");
-            return false;
+        log.info("Sending invitation email using sender username: {}", effectiveUsername);
+
+        // Try sending with Port 465 SSL first, if fails try Port 587 TLS
+        boolean sent = trySendViaPort(465, true, effectiveUsername, effectivePassword, toEmail, inviterName, destination, datesStr, acceptUrl, declineUrl);
+        if (!sent) {
+            log.warn("Port 465 SSL failed, trying port 587 TLS as fallback...");
+            sent = trySendViaPort(587, false, effectiveUsername, effectivePassword, toEmail, inviterName, destination, datesStr, acceptUrl, declineUrl);
         }
 
+        if (sent) {
+            log.info("Invitation email sent successfully to {} for invitation {}", toEmail, invitation.getId());
+        } else {
+            log.error("All SMTP attempts failed for invitation {}", invitation.getId());
+        }
+        return sent;
+    }
+
+    private boolean trySendViaPort(int port, boolean ssl, String username, String password, String toEmail, 
+                                   String inviterName, String destination, String datesStr, String acceptUrl, String declineUrl) {
         try {
             org.springframework.mail.javamail.JavaMailSenderImpl directSender = new org.springframework.mail.javamail.JavaMailSenderImpl();
             directSender.setHost("smtp.gmail.com");
-            directSender.setPort(465);
-            directSender.setUsername(effectiveUsername.trim());
-            directSender.setPassword(effectivePassword.trim().replaceAll("\\s+", ""));
+            directSender.setPort(port);
+            directSender.setUsername(username.trim());
+            directSender.setPassword(password.trim().replaceAll("\\s+", ""));
 
             java.util.Properties props = directSender.getJavaMailProperties();
             props.put("mail.transport.protocol", "smtp");
             props.put("mail.smtp.auth", "true");
-            props.put("mail.smtp.ssl.enable", "true");
-            props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
-            props.put("mail.smtp.connectiontimeout", "10000");
-            props.put("mail.smtp.timeout", "10000");
-            props.put("mail.smtp.writetimeout", "10000");
+            if (ssl) {
+                props.put("mail.smtp.ssl.enable", "true");
+                props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+            } else {
+                props.put("mail.smtp.starttls.enable", "true");
+                props.put("mail.smtp.starttls.required", "true");
+                props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+            }
+            props.put("mail.smtp.connectiontimeout", "8000");
+            props.put("mail.smtp.timeout", "8000");
+            props.put("mail.smtp.writetimeout", "8000");
 
             MimeMessage message = directSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(effectiveUsername.trim(), "WanderPlan Travel Planner");
+            helper.setFrom(username.trim(), "WanderPlan Travel Planner");
             helper.setTo(toEmail);
             helper.setSubject("You're Invited! Join " + inviterName + " on a trip to " + destination);
             helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
 
             directSender.send(message);
-            log.info("Invitation email sent successfully via SMTP for invitation {}", invitation.getId());
             return true;
         } catch (Exception e) {
-            log.error("SMTP invitation delivery failed for invitation {}", invitation.getId(), e);
+            log.error("SMTP sending failed on port {} (ssl={}): {}", port, ssl, e.getMessage());
             return false;
         }
     }
