@@ -139,24 +139,17 @@ public class EmailService {
 
             int responseCode = conn.getResponseCode();
 
-            // Google Apps Script returns 302 redirect on POST - we need to follow it
+            // Google Apps Script returns 302 redirect - the redirect target must be fetched with GET
             if (responseCode == 302 || responseCode == 301) {
                 String redirectUrl = conn.getHeaderField("Location");
                 if (redirectUrl != null) {
-                    log.info("Following Apps Script redirect...");
+                    log.info("Following Apps Script redirect via GET...");
                     conn.disconnect();
                     URL rUrl = new URL(redirectUrl);
                     HttpURLConnection rConn = (HttpURLConnection) rUrl.openConnection();
-                    rConn.setRequestMethod("POST");
-                    rConn.setRequestProperty("Content-Type", "application/json");
-                    rConn.setDoOutput(true);
+                    rConn.setRequestMethod("GET");
                     rConn.setConnectTimeout(15000);
                     rConn.setReadTimeout(15000);
-
-                    try (OutputStream os = rConn.getOutputStream()) {
-                        os.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
-                        os.flush();
-                    }
 
                     responseCode = rConn.getResponseCode();
                     String responseBody = new String(
@@ -167,7 +160,7 @@ public class EmailService {
                     );
                     rConn.disconnect();
                     log.info("Webhook redirect response: {} - {}", responseCode, responseBody);
-                    return responseBody.contains("\"success\":true") || responseCode == 200;
+                    return responseBody.contains("\"status\":\"success\"") || responseBody.contains("\"success\":true") || responseCode == 200;
                 }
             }
 
