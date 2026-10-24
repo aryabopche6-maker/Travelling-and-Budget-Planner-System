@@ -6,11 +6,20 @@ import Input from '../../components/common/Input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tripService } from '../../services/tripService';
 import { invitationService } from '../../services/invitationService';
+import { useNavigate } from 'react-router-dom';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 
 export default function GroupMembers() {
   const { trip, isTripAdmin } = useTrip();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (trip && !isTripAdmin) {
+      navigate(`/trips/${trip.id}/overview`, { replace: true });
+    }
+  }, [trip, isTripAdmin, navigate]);
+
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [invitations, setInvitations] = useState([]);

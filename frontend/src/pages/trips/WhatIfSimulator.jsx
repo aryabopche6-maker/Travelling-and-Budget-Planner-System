@@ -15,10 +15,16 @@ import { tripService } from '../../services/tripService';
 import { budgetService } from '../../services/budgetService';
 
 export default function WhatIfSimulator() {
-  const { trip, setTrip } = useTrip();
+  const { trip, setTrip, isTripAdmin } = useTrip();
   const navigate = useNavigate();
 
-  if (!trip) return null;
+  useEffect(() => {
+    if (trip && !isTripAdmin) {
+      navigate(`/trips/${trip.id}/overview`, { replace: true });
+    }
+  }, [trip, isTripAdmin, navigate]);
+
+  if (!trip || !isTripAdmin) return null;
 
   // Real trip initial parameters
   const initialBudget = trip.budget || trip.totalBudget || 70000;

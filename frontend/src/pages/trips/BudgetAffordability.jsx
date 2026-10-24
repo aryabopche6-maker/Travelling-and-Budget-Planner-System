@@ -48,7 +48,7 @@ const CATEGORY_CONFIG = {
 };
 
 export default function BudgetAffordability() {
-  const { trip } = useTrip();
+  const { trip, isTripAdmin } = useTrip();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(false);
@@ -242,7 +242,7 @@ export default function BudgetAffordability() {
 
           <nav aria-label="Budget quick actions" className="flex flex-wrap gap-2">
             {[
-              { label: 'What-if simulator', path: `/trips/${trip.id}/simulator`, icon: Edit3, color: 'text-slate-800 bg-white/95 border-white/70 hover:bg-slate-100' },
+              ...(isTripAdmin ? [{ label: 'What-if simulator', path: `/trips/${trip.id}/simulator`, icon: Edit3, color: 'text-slate-800 bg-white/95 border-white/70 hover:bg-slate-100' }] : []),
               { label: 'Expenses', path: `/trips/${trip.id}/expenses`, icon: FileText, color: 'text-teal-950 bg-white/95 border-white/70 hover:bg-teal-50' },
               { label: 'Hidden costs', path: `/trips/${trip.id}/hidden-costs`, icon: ShieldAlert, color: 'text-amber-950 bg-white/95 border-white/70 hover:bg-amber-50' },
               { label: 'Smart alternatives', path: `/trips/${trip.id}/alternatives`, icon: Lightbulb, color: 'text-emerald-950 bg-white/95 border-white/70 hover:bg-emerald-50' }
