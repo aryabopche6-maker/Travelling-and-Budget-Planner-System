@@ -15,6 +15,7 @@ export default function MyTrips() {
   const [trips, setTrips] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +45,12 @@ export default function MyTrips() {
     };
   }, [user?.id]);
 
-  const filteredTrips = trips.filter(trip => filter === 'All' || trip.status === filter);
+  const filteredTrips = trips.filter(trip => {
+    const matchesStatus = filter === 'All' || trip.status?.toLowerCase() === filter.toLowerCase();
+    const matchesSearch = !searchQuery.trim()
+      || trip.destination?.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
   return (
     <PageTransition variant="slideUp" className="space-y-8 pb-8 h-full flex flex-col">
@@ -83,6 +89,8 @@ export default function MyTrips() {
           <input 
             type="text" 
             placeholder="Search trips..." 
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full sm:w-64 bg-white border border-muted/30 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-teal-500 text-charcoal transition-colors placeholder:text-secondary"
           />
         </div>

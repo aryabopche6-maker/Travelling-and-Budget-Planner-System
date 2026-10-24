@@ -44,6 +44,15 @@ public class PollController {
         return ResponseEntity.ok(ApiResponse.success("Vote recorded successfully", poll));
     }
 
+    @DeleteMapping("/{pollId}/vote")
+    public ResponseEntity<ApiResponse<PollResponse>> removeVote(
+            @PathVariable Long tripId,
+            @PathVariable Long pollId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        PollResponse poll = pollService.removeVote(tripId, pollId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Vote removed successfully", poll));
+    }
+
     @PostMapping("/{pollId}/lock")
     public ResponseEntity<ApiResponse<PollResponse>> lockPoll(
             @PathVariable Long tripId,

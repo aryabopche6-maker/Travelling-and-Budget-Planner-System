@@ -54,14 +54,18 @@ public class ExpenseService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
-        User payer = userRepository.findById(userId)
+        Long payerId = request.getPaidBy() != null ? request.getPaidBy() : userId;
+        if (!tripMemberRepository.existsByTripIdAndUserId(tripId, payerId)) {
+            throw new BadRequestException("The selected payer is not a member of this trip");
+        }
+        User payer = userRepository.findById(payerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payer user not found"));
 
         Expense expense = Expense.builder()
                 .trip(trip)
                 .title(request.getTitle())
                 .amount(request.getAmount())
-                .paidBy(userId)
+                .paidBy(payerId)
                 .paidByName(payer.getName())
                 .date(request.getDate() != null ? request.getDate() : LocalDate.now())
                 .category(request.getCategory() != null ? request.getCategory() : "Misc")
@@ -90,6 +94,9 @@ public class ExpenseService {
             }
         } else {
             for (ExpenseSplitDto sDto : request.getSplits()) {
+                if (sDto.getUserId() == null || !tripMemberRepository.existsByTripIdAndUserId(tripId, sDto.getUserId())) {
+                    throw new BadRequestException("Every expense split must belong to a trip member");
+                }
                 ExpenseSplit split = ExpenseSplit.builder()
                         .expense(expense)
                         .userId(sDto.getUserId())
@@ -117,6 +124,7 @@ public class ExpenseService {
         tripService.validateTripMembership(tripId, userId);
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
+        validateExpenseTrip(expense, tripId);
 
         expense.setStatus("ACCEPTED");
         return mapToResponse(expenseRepository.save(expense));
@@ -127,9 +135,20 @@ public class ExpenseService {
         tripService.validateTripMembership(tripId, userId);
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
+        validateExpenseTrip(expense, tripId);
 
         expense.setStatus("DISPUTED");
         expense.setDisputeReason(request.getReason());
+        return mapToResponse(expenseRepository.save(expense));
+    }
+
+    @Transactional
+    public ExpenseResponse rejectExpense(Long tripId, Long expenseId, Long userId) {
+        tripService.validateTripAdmin(tripId, userId);
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
+        validateExpenseTrip(expense, tripId);
+        expense.setStatus("REJECTED");
         return mapToResponse(expenseRepository.save(expense));
     }
 
@@ -138,6 +157,7 @@ public class ExpenseService {
         tripService.validateTripMembership(tripId, userId);
         Expense expense = expenseRepository.findById(expenseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
+        validateExpenseTrip(expense, tripId);
 
         expense.setStatus("SETTLED");
         for (ExpenseSplit s : expense.getSplits()) {
@@ -146,7 +166,23 @@ public class ExpenseService {
         return mapToResponse(expenseRepository.save(expense));
     }
 
-    public String storeProofFile(MultipartFile file) {
+    @Transactional
+    public void deleteExpense(Long tripId, Long expenseId, Long userId) {
+        tripService.validateTripAdmin(tripId, userId);
+        Expense expense = expenseRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
+        validateExpenseTrip(expense, tripId);
+        expenseRepository.delete(expense);
+    }
+
+    private void validateExpenseTrip(Expense expense, Long tripId) {
+        if (!expense.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Expense not found");
+        }
+    }
+
+    public String storeProofFile(Long tripId, Long userId, MultipartFile file) {
+        tripService.validateTripMembership(tripId, userId);
         // Validation: Size (Max 5MB)
         if (file.getSize() > 5 * 1024 * 1024) {
             throw new BadRequestException("File size exceeds maximum limit of 5MB.");

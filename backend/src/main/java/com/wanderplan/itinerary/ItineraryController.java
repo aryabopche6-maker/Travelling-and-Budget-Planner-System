@@ -30,7 +30,7 @@ public class ItineraryController {
     public ResponseEntity<ApiResponse<ItineraryResponse>> generateItinerary(
             @PathVariable Long tripId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        itineraryService.generateInitialItinerary(tripId);
+        itineraryService.generateInitialItinerary(tripId, userPrincipal.getId());
         ItineraryResponse itinerary = itineraryService.getItinerary(tripId, userPrincipal.getId());
         return ResponseEntity.ok(ApiResponse.success("Itinerary generated", itinerary));
     }

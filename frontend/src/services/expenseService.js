@@ -47,8 +47,18 @@ export const expenseService = {
     return response.data?.data;
   },
 
+  rejectExpense: async (tripId, expenseId) => {
+    const response = await api.post(`/trips/${tripId}/expenses/${expenseId}/reject`);
+    return response.data?.data;
+  },
+
   settleExpense: async (tripId, expenseId) => {
     const response = await api.post(`/trips/${tripId}/expenses/${expenseId}/settle`);
     return response.data?.data;
+  },
+
+  deleteExpense: async (tripId, expenseId) => {
+    const response = await api.delete(`/trips/${tripId}/expenses/${expenseId}`);
+    return response.data;
   },
 };

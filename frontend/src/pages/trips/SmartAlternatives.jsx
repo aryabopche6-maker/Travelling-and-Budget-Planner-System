@@ -81,6 +81,7 @@ export default function SmartAlternatives() {
   const [swapped, setSwapped] = useState([]);
   const [applyingId, setApplyingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [applyError, setApplyError] = useState('');
 
   // Load smart alternatives from backend
   const fetchAlternatives = async () => {
@@ -121,6 +122,7 @@ export default function SmartAlternatives() {
     if (!trip?.id || applyingId) return;
     try {
       setApplyingId(altId);
+      setApplyError('');
       // Real API call: persist alternative into trip & budget
       await budgetService.applyAlternative(trip.id, altId);
 
@@ -135,7 +137,7 @@ export default function SmartAlternatives() {
       }
     } catch (err) {
       console.error('Failed to swap alternative:', err);
-      setSwapped(prev => [...prev, altId]);
+      setApplyError(err.response?.data?.message || 'Could not apply this alternative. Please try again.');
     } finally {
       setApplyingId(null);
     }
@@ -169,6 +171,12 @@ export default function SmartAlternatives() {
           </div>
         </div>
       </div>
+
+      {applyError && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          {applyError}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6">
         {alternativesList.map((alt, index) => {

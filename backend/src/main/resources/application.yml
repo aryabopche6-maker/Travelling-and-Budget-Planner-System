@@ -53,14 +53,14 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    secret: ${JWT_SECRET}
     expiration-ms: 86400000 # 24 hours
   frontend:
     url: ${FRONTEND_URL:https://travelling-and-budget-planner-syste.vercel.app}
   invitation:
     expiry-days: 7
   cors:
-    allowed-origins: ${CORS_ORIGIN:http://localhost:5173}
+    allowed-origins: ${CORS_ORIGIN:https://travelling-and-budget-planner-syste.vercel.app,http://localhost:5173}
   external:
     places:
       api-key: ${PLACES_API_KEY:NO_KEY}

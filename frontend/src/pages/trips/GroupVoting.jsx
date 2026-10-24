@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTrip } from '../../context/TripContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import PageTransition from '../../components/common/PageTransition';
 import Reveal from '../../components/animations/Reveal';
+import { pollService } from '../../services/pollService';
 
 const initialPolls = [
   {
@@ -89,9 +90,33 @@ const initialPolls = [
   }
 ];
 
+const mapPoll = (poll) => ({
+  id: String(poll.id),
+  category: (poll.category || 'GENERAL').toUpperCase(),
+  question: poll.title,
+  totalVotes: Number(poll.totalVotes) || 0,
+  status: poll.isLocked ? 'Closed' : 'Open',
+  endsIn: poll.createdAt ? `Created ${new Date(poll.createdAt).toLocaleDateString()}` : '',
+  createdBy: { name: `Member ${poll.createdBy ?? ''}`.trim() },
+  headerImage: null,
+  userVotedOptionId: poll.userVotedOptionId == null ? null : String(poll.userVotedOptionId),
+  voters: [],
+  voterNote: null,
+  isLocked: Boolean(poll.isLocked),
+  options: (poll.options || []).map((option) => ({
+    id: String(option.id),
+    name: option.text,
+    votes: Number(option.votesCount) || 0,
+    image: null
+  }))
+});
+
 export default function GroupVoting() {
-  const { isTripAdmin } = useTrip();
-  const [polls, setPolls] = useState(initialPolls);
+  const { trip, isTripAdmin } = useTrip();
+  const [polls, setPolls] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pollsError, setPollsError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState('All'); // 'All', 'MyVotes', 'Open', 'Closed'
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -99,68 +124,82 @@ export default function GroupVoting() {
   const [newCategory, setNewCategory] = useState('HOTEL');
   const [newOptions, setNewOptions] = useState(['', '']);
 
-  // Handle Voting / Changing Vote
-  const handleVote = (pollId, optionId) => {
-    setPolls(prev => prev.map(p => {
-      if (p.id !== pollId) return p;
-      const prevVoted = p.userVotedOptionId;
-      
-      const updatedOptions = p.options.map(opt => {
-        if (opt.id === optionId) {
-          return { ...opt, votes: opt.votes + (prevVoted === optionId ? 0 : 1) };
-        }
-        if (opt.id === prevVoted) {
-          return { ...opt, votes: Math.max(0, opt.votes - 1) };
-        }
-        return opt;
+  useEffect(() => {
+    let isMounted = true;
+    if (!trip?.id) {
+      setIsLoading(false);
+      return () => { isMounted = false; };
+    }
+
+    setIsLoading(true);
+    pollService.getTripPolls(trip.id)
+      .then((data) => {
+        if (isMounted) setPolls(data.map(mapPoll));
+      })
+      .catch((error) => {
+        console.error('Failed to load group polls:', error);
+        if (isMounted) setPollsError(error.response?.data?.message || 'Could not load group polls.');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
-      const totalVotes = prevVoted ? p.totalVotes : p.totalVotes + 1;
-      return {
-        ...p,
-        totalVotes,
-        userVotedOptionId: optionId,
-        options: updatedOptions
-      };
-    }));
+    return () => { isMounted = false; };
+  }, [trip?.id]);
+
+  // Handle Voting / Changing Vote
+  const handleVote = async (pollId, optionId) => {
+    if (!trip?.id) return;
+    try {
+      setPollsError('');
+      const poll = optionId == null
+        ? await pollService.removeVote(trip.id, pollId)
+        : await pollService.castVote(trip.id, pollId, Number(optionId));
+      const updatedPoll = mapPoll(poll);
+      setPolls((previous) => previous.map((item) => item.id === updatedPoll.id ? updatedPoll : item));
+    } catch (error) {
+      console.error('Failed to update group poll vote:', error);
+      setPollsError(error.response?.data?.message || 'Could not save your vote. Please try again.');
+    }
   };
 
-  const handleCreatePoll = (e) => {
+  const handleCreatePoll = async (e) => {
     e.preventDefault();
-    if (!newQuestion.trim()) return;
-    const validOptions = newOptions.filter(o => o.trim()).map((optText, i) => ({
-      id: `opt-new-${Date.now()}-${i}`,
-      name: optText,
-      votes: 0,
-      image: newCategory === 'HOTEL' 
-        ? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=120&h=120&fit=crop' 
-        : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=120&h=120&fit=crop'
-    }));
+    const options = newOptions.map((option) => option.trim()).filter(Boolean);
+    if (!trip?.id || !newQuestion.trim() || options.length < 2) return;
 
-    const newPoll = {
-      id: `poll-${Date.now()}`,
-      category: newCategory,
-      type: newCategory === 'HOTEL' ? 'Hotel' : 'Activity',
-      question: newQuestion,
-      totalVotes: 0,
-      status: 'Open',
-      endsIn: 'Ends in 3 days',
-      createdBy: {
-        name: 'You',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'
-      },
-      headerImage: newCategory === 'HOTEL' 
-        ? 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=200&fit=crop'
-        : 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=400&h=200&fit=crop',
-      userVotedOptionId: null,
-      voters: [],
-      options: validOptions
-    };
+    try {
+      setIsSaving(true);
+      setPollsError('');
+      const poll = await pollService.createPoll(trip.id, {
+        title: newQuestion.trim(),
+        category: newCategory,
+        isAnonymous: false,
+        options
+      });
+      setPolls((previous) => [mapPoll(poll), ...previous]);
+      setIsCreateModalOpen(false);
+      setNewQuestion('');
+      setNewOptions(['', '']);
+    } catch (error) {
+      console.error('Failed to create group poll:', error);
+      setPollsError(error.response?.data?.message || 'Could not create this poll. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    setPolls([newPoll, ...polls]);
-    setIsCreateModalOpen(false);
-    setNewQuestion('');
-    setNewOptions(['', '']);
+  const handleLockPoll = async (pollId) => {
+    if (!trip?.id) return;
+    try {
+      setPollsError('');
+      const poll = await pollService.lockPoll(trip.id, pollId);
+      const updatedPoll = mapPoll(poll);
+      setPolls((previous) => previous.map((item) => item.id === updatedPoll.id ? updatedPoll : item));
+    } catch (error) {
+      console.error('Failed to lock group poll:', error);
+      setPollsError(error.response?.data?.message || 'Could not lock this poll. Please try again.');
+    }
   };
 
   // Filtered Polls
@@ -227,6 +266,12 @@ export default function GroupVoting() {
             </div>
           </div>
         </Reveal>
+
+        {pollsError && (
+          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {pollsError}
+          </p>
+        )}
 
         {/* Stats Cards (Active Polls & Your Votes) */}
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -319,9 +364,17 @@ export default function GroupVoting() {
                             className="w-24 h-16 rounded-xl object-cover shadow-xs border border-white"
                           />
                         )}
-                        <button className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
-                          <MoreHorizontal className="w-5 h-5" />
-                        </button>
+                        {isTripAdmin && !poll.isLocked && (
+                          <button
+                            type="button"
+                            aria-label="Lock poll"
+                            title="Lock poll"
+                            onClick={() => handleLockPoll(poll.id)}
+                            className="p-1 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
+                          >
+                            <MoreHorizontal className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -336,11 +389,6 @@ export default function GroupVoting() {
                       </span>
                       <span>•</span>
                       <span className="flex items-center gap-1.5 font-medium">
-                        <img 
-                          src={poll.createdBy.avatar} 
-                          alt={poll.createdBy.name} 
-                          className="w-4 h-4 rounded-full object-cover"
-                        />
                         Created by {poll.createdBy.name}
                       </span>
                     </div>
@@ -356,8 +404,8 @@ export default function GroupVoting() {
                         return (
                           <div 
                             key={option.id}
-                            onClick={() => handleVote(poll.id, option.id)}
-                            className={`group relative rounded-2xl p-3 border transition-all duration-200 cursor-pointer flex items-center justify-between gap-4 ${
+                            onClick={() => !poll.isLocked && handleVote(poll.id, option.id)}
+                            className={`group relative rounded-2xl p-3 border transition-all duration-200 ${poll.isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} flex items-center justify-between gap-4 ${
                               isSelected 
                                 ? 'bg-emerald-50/50 border-emerald-500/70 shadow-xs' 
                                 : 'bg-slate-50/70 hover:bg-white border-slate-200/80 hover:border-slate-300'
@@ -437,11 +485,13 @@ export default function GroupVoting() {
                       </div>
 
                       <button 
+                        type="button"
+                        disabled={poll.isLocked}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleVote(poll.id, null);
                         }}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 bg-white hover:bg-teal-50 border border-teal-200 px-3 py-1.5 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <RotateCcw className="w-3 h-3" /> Change Vote
                       </button>
@@ -458,6 +508,12 @@ export default function GroupVoting() {
             );
           })}
         </div>
+        {isLoading && (
+          <p role="status" className="py-10 text-center text-sm text-slate-500">Loading polls...</p>
+        )}
+        {!isLoading && !pollsError && filteredPolls.length === 0 && (
+          <p className="py-10 text-center text-sm text-slate-500">No polls yet for this trip.</p>
+        )}
 
         {/* Footer subtle text */}
         <div className="pt-8 text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
@@ -568,9 +624,10 @@ export default function GroupVoting() {
                   </button>
                   <button
                     type="submit"
+                    disabled={isSaving}
                     className="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl shadow-md"
                   >
-                    Create Poll
+                    {isSaving ? 'Creating...' : 'Create Poll'}
                   </button>
                 </div>
               </form>

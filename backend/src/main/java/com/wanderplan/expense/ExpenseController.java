@@ -59,6 +59,15 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success("Expense disputed", expense));
     }
 
+    @PostMapping("/{expenseId}/reject")
+    public ResponseEntity<ApiResponse<ExpenseResponse>> rejectExpense(
+            @PathVariable Long tripId,
+            @PathVariable Long expenseId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        ExpenseResponse expense = expenseService.rejectExpense(tripId, expenseId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Expense rejected", expense));
+    }
+
     @PostMapping("/{expenseId}/settle")
     public ResponseEntity<ApiResponse<ExpenseResponse>> settleExpense(
             @PathVariable Long tripId,
@@ -68,10 +77,21 @@ public class ExpenseController {
         return ResponseEntity.ok(ApiResponse.success("Expense settled", expense));
     }
 
+    @DeleteMapping("/{expenseId}")
+    public ResponseEntity<ApiResponse<Void>> deleteExpense(
+            @PathVariable Long tripId,
+            @PathVariable Long expenseId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        expenseService.deleteExpense(tripId, expenseId, userPrincipal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Expense deleted"));
+    }
+
     @PostMapping("/upload-proof")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadProof(
+            @PathVariable Long tripId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam("file") MultipartFile file) {
-        String proofUrl = expenseService.storeProofFile(file);
+        String proofUrl = expenseService.storeProofFile(tripId, userPrincipal.getId(), file);
         return ResponseEntity.ok(ApiResponse.success("File uploaded", Map.of("proofUrl", proofUrl)));
     }
 

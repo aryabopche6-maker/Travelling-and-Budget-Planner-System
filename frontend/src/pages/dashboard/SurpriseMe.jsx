@@ -4,27 +4,45 @@ import { Wand2, MapPin, Calendar, Users, Wallet, Target, Sparkles, Check } from 
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { Link } from 'react-router-dom';
-
-const mockResult = {
-  destination: 'Hoi An, Vietnam',
-  image: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800&q=80',
-  matchScore: 94,
-  reason: 'Perfectly aligns with your budget and desire for rich culture, incredible food, and a relaxed pace.',
-  estimatedBudget: '₹42,000 / person',
-  suggestedActivities: ['Lantern making class', 'An Bang Beach relaxation', 'Street food night tour']
-};
+import api from '../../services/api';
 
 export default function SurpriseMe() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ startingLocation: '', budget: '', days: '', travelers: '' });
+  const [interests, setInterests] = useState([]);
 
-  const handleGenerate = (e) => {
+  const handleGenerate = async (e) => {
     e.preventDefault();
     setIsGenerating(true);
-    setTimeout(() => {
-      setResult(mockResult);
+    setError('');
+    try {
+      const response = await api.post('/surprise-me', {
+        startingLocation: form.startingLocation.trim(),
+        budget: Number(form.budget),
+        days: Number(form.days),
+        travelers: Number(form.travelers),
+        interests
+      });
+      const recommendation = response.data?.data;
+      if (!recommendation?.suggestedDestination) {
+        throw new Error('The recommendation service returned no destination.');
+      }
+      setResult({
+        destination: `${recommendation.suggestedDestination}${recommendation.country ? `, ${recommendation.country}` : ''}`,
+        country: recommendation.country,
+        image: recommendation.imageUrl,
+        reason: recommendation.matchReason,
+        estimatedBudget: `₹${Number(recommendation.estimatedTotalBudget || 0).toLocaleString('en-IN')} estimated total`,
+        suggestedActivities: recommendation.suggestedActivities || []
+      });
+    } catch (requestError) {
+      console.error('Failed to generate destination recommendation:', requestError);
+      setError(requestError.response?.data?.message || requestError.message || 'Could not find a destination. Please try again.');
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -35,7 +53,7 @@ export default function SurpriseMe() {
         </div>
         <h1 className="text-3xl font-bold font-display text-charcoal">Find My Next Adventure</h1>
         <p className="text-muted mt-2 max-w-lg mx-auto">
-          Not sure where to go? Tell us your budget, vibe, and constraints, and our AI will find your perfect destination.
+          Not sure where to go? Share your budget, vibe, and constraints to get a destination recommendation.
         </p>
       </div>
 
@@ -51,28 +69,28 @@ export default function SurpriseMe() {
                 <label className="block text-sm font-medium text-charcoal mb-1">Starting Location</label>
                 <div className="relative">
                   <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input required placeholder="Where are you flying from?" className="pl-10" />
+                  <Input required placeholder="Where are you flying from?" className="pl-10" value={form.startingLocation} onChange={(event) => setForm({ ...form, startingLocation: event.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-charcoal mb-1">Total Budget</label>
                 <div className="relative">
                   <Wallet className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input type="number" required placeholder="Maximum budget (₹)" className="pl-10" />
+                  <Input type="number" min="1" required placeholder="Maximum budget (₹)" className="pl-10" value={form.budget} onChange={(event) => setForm({ ...form, budget: event.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-charcoal mb-1">Days Available</label>
                 <div className="relative">
                   <Calendar className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input type="number" required placeholder="How many days?" className="pl-10" />
+                  <Input type="number" min="1" max="16" required placeholder="How many days?" className="pl-10" value={form.days} onChange={(event) => setForm({ ...form, days: event.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-charcoal mb-1">Travelers</label>
                 <div className="relative">
                   <Users className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <Input type="number" required placeholder="Number of people" className="pl-10" />
+                  <Input type="number" min="1" required placeholder="Number of people" className="pl-10" value={form.travelers} onChange={(event) => setForm({ ...form, travelers: event.target.value })} />
                 </div>
               </div>
             </div>
@@ -82,7 +100,14 @@ export default function SurpriseMe() {
               <div className="flex flex-wrap gap-2">
                 {['Culture', 'Beach', 'Adventure', 'Food', 'Nightlife', 'Nature'].map(vibe => (
                   <label key={vibe} className="cursor-pointer">
-                    <input type="checkbox" className="hidden peer" />
+                    <input
+                      type="checkbox"
+                      className="hidden peer"
+                      checked={interests.includes(vibe)}
+                      onChange={(event) => setInterests((previous) => event.target.checked
+                        ? [...previous, vibe]
+                        : previous.filter((interest) => interest !== vibe))}
+                    />
                     <div className="px-4 py-2 rounded-full border border-muted/30 bg-bg text-muted peer-checked:bg-teal peer-checked:text-white peer-checked:border-teal transition-all duration-300 hover:border-teal/40">
                       {vibe}
                     </div>
@@ -90,6 +115,8 @@ export default function SurpriseMe() {
                 ))}
               </div>
             </div>
+
+            {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
 
             <div className="pt-6">
               <Button type="submit" size="lg" className="btn-shine w-full text-lg shadow-lg shadow-teal/20" isLoading={isGenerating}>
@@ -123,7 +150,7 @@ export default function SurpriseMe() {
               className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-teal/30 flex items-center gap-2"
             >
               <Target className="w-4 h-4 text-teal" />
-              <span className="font-bold text-teal">{result.matchScore}% Match</span>
+              <span className="font-bold text-teal">{result.country || 'Suggested destination'}</span>
             </motion.div>
             
             <div className="absolute bottom-6 left-6 right-6">

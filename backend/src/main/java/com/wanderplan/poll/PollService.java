@@ -91,6 +91,9 @@ public class PollService {
 
         Poll poll = pollRepository.findById(pollId)
                 .orElseThrow(() -> new ResourceNotFoundException("Poll not found"));
+        if (!poll.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Poll not found");
+        }
 
         if (Boolean.TRUE.equals(poll.getIsLocked())) {
             throw new BadRequestException("This poll has been locked by the admin. Voting is closed.");
@@ -123,6 +126,23 @@ public class PollService {
                 userName + " voted in poll: \"" + poll.getTitle() + "\"",
                 "Vote", "POLL");
 
+        return mapToResponse(poll, userId);
+    }
+
+    @Transactional
+    public PollResponse removeVote(Long tripId, Long pollId, Long userId) {
+        tripService.validateTripMembership(tripId, userId);
+
+        Poll poll = pollRepository.findById(pollId)
+                .orElseThrow(() -> new ResourceNotFoundException("Poll not found"));
+        if (!poll.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Poll not found");
+        }
+        if (Boolean.TRUE.equals(poll.getIsLocked())) {
+            throw new BadRequestException("This poll has been locked. Votes can no longer be changed.");
+        }
+
+        voteRepository.findByPollIdAndUserId(pollId, userId).ifPresent(voteRepository::delete);
         return mapToResponse(poll, userId);
     }
 

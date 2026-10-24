@@ -17,6 +17,11 @@ export const pollService = {
     return response.data?.data;
   },
 
+  removeVote: async (tripId, pollId) => {
+    const response = await api.delete(`/trips/${tripId}/polls/${pollId}/vote`);
+    return response.data?.data;
+  },
+
   lockPoll: async (tripId, pollId, optionId = null) => {
     const response = await api.post(`/trips/${tripId}/polls/${pollId}/lock`, null, {
       params: optionId ? { optionId } : {}

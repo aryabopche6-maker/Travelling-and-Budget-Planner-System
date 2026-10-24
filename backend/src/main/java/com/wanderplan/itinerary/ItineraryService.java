@@ -322,6 +322,12 @@ public class ItineraryService {
         return generatedDays;
     }
 
+    @Transactional
+    public List<ItineraryDay> generateInitialItinerary(Long tripId, Long userId) {
+        tripService.validateTripMembership(tripId, userId);
+        return generateInitialItinerary(tripId);
+    }
+
     // --- Place Selection API ---
     public List<TripSelectedPlace> getSelectedPlaces(Long tripId, Long userId) {
         tripService.validateTripMembership(tripId, userId);
@@ -397,6 +403,9 @@ public class ItineraryService {
 
         ItineraryDay day = dayRepository.findById(request.getDayId())
                 .orElseThrow(() -> new ResourceNotFoundException("Itinerary day not found"));
+        if (!day.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Itinerary day not found");
+        }
 
         ItineraryActivity act = ItineraryActivity.builder()
                 .itineraryDay(day)
@@ -430,6 +439,11 @@ public class ItineraryService {
     @Transactional
     public void deleteActivity(Long tripId, Long activityId, Long userId) {
         tripService.validateTripMembership(tripId, userId);
-        activityRepository.deleteById(activityId);
+        ItineraryActivity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new ResourceNotFoundException("Activity not found"));
+        if (!activity.getItineraryDay().getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Activity not found");
+        }
+        activityRepository.delete(activity);
     }
 }

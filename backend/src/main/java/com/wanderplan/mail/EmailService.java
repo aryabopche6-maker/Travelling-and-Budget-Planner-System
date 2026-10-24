@@ -5,10 +5,7 @@ import com.wanderplan.trip.Trip;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.Environment;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
@@ -22,12 +19,6 @@ import java.time.format.DateTimeFormatter;
 public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
-
-    @Autowired(required = false)
-    private JavaMailSender mailSender;
-
-    @Autowired
-    private Environment environment;
 
     @Value("${spring.mail.username:${MAIL_USERNAME:}}")
     private String mailUsername;
@@ -56,28 +47,19 @@ public class EmailService {
         String acceptUrl = frontendUrl.replaceAll("/+$", "") + "/invitations/accept?token=" + invitation.getToken();
         String declineUrl = frontendUrl.replaceAll("/+$", "") + "/invitations/decline?token=" + invitation.getToken();
 
-        String effectiveUsername = (mailUsername != null && !mailUsername.isBlank()) 
-                ? mailUsername 
-                : (System.getenv("MAIL_USERNAME") != null && !System.getenv("MAIL_USERNAME").isBlank() 
-                    ? System.getenv("MAIL_USERNAME") 
-                    : "aryabopche6@gmail.com");
-
-        String effectivePassword = (mailPassword != null && !mailPassword.isBlank()) 
-                ? mailPassword 
-                : (System.getenv("MAIL_PASSWORD") != null && !System.getenv("MAIL_PASSWORD").isBlank() 
-                    ? System.getenv("MAIL_PASSWORD") 
-                    : "xywkkpaedvrielbf");
-
         String subject = "You're Invited! Join " + inviterName + " on a trip to " + destination;
         String htmlBody = buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl);
 
-        log.info("Sending invitation email to {} using sender: {}", toEmail, effectiveUsername);
-
-        // Strategy 1: Try SMTP directly (works on localhost & non-restricted clouds)
-        boolean sent = trySendViaPort(465, true, effectiveUsername, effectivePassword, toEmail, subject, htmlBody);
-        if (!sent) {
-            log.warn("Port 465 SSL failed, trying port 587 TLS...");
-            sent = trySendViaPort(587, false, effectiveUsername, effectivePassword, toEmail, subject, htmlBody);
+        boolean sent = false;
+        if (mailUsername != null && !mailUsername.isBlank() && mailPassword != null && !mailPassword.isBlank()) {
+            log.info("Sending invitation email to {} using configured SMTP", toEmail);
+            sent = trySendViaPort(465, true, mailUsername, mailPassword, toEmail, subject, htmlBody);
+            if (!sent) {
+                log.warn("Port 465 SSL failed, trying port 587 TLS...");
+                sent = trySendViaPort(587, false, mailUsername, mailPassword, toEmail, subject, htmlBody);
+            }
+        } else {
+            log.warn("SMTP credentials are not configured; trying the email webhook fallback.");
         }
 
         // Strategy 2: If SMTP fails (cloud ports blocked), use Google Apps Script HTTPS webhook

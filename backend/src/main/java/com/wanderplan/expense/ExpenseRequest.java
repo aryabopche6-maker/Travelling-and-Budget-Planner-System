@@ -14,6 +14,7 @@ public class ExpenseRequest {
     private Double amount;
 
     private LocalDate date;
+    private Long paidBy;
     private String category;
     private String paymentMethod;
     private String splitType; // EQUAL, CUSTOM
@@ -55,6 +56,14 @@ public class ExpenseRequest {
 
     public void setDate(LocalDate date) {
         this.date = date;
+    }
+
+    public Long getPaidBy() {
+        return paidBy;
+    }
+
+    public void setPaidBy(Long paidBy) {
+        this.paidBy = paidBy;
     }
 
     public String getCategory() {

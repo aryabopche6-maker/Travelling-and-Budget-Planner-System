@@ -87,6 +87,10 @@ public class MemberService {
         TripMember member = tripMemberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
 
+        if (!member.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Member not found");
+        }
+
         if (Boolean.TRUE.equals(member.getIsTripAdmin())) {
             throw new BadRequestException("Cannot remove trip admin");
         }

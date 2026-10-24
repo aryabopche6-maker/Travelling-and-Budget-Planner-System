@@ -130,7 +130,12 @@ public class BudgetService {
     @Transactional
     public void deleteHiddenCost(Long tripId, Long costId, Long userId) {
         tripService.validateTripMembership(tripId, userId);
-        hiddenCostRepository.deleteById(costId);
+        HiddenCost hiddenCost = hiddenCostRepository.findById(costId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hidden cost not found"));
+        if (!hiddenCost.getTrip().getId().equals(tripId)) {
+            throw new ResourceNotFoundException("Hidden cost not found");
+        }
+        hiddenCostRepository.delete(hiddenCost);
     }
 
     public SimulationResponse simulateBudget(Long tripId, Long userId, SimulationRequest request) {

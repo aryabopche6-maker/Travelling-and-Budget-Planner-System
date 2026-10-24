@@ -83,7 +83,7 @@ export default function TripDashboard() {
         api.get(`/trips/${trip.id}/weather`),
         itineraryService.getItinerary(trip.id),
         pollService.getTripPolls(trip.id),
-        api.get(`/activities/trips/${trip.id}`)
+        api.get(`/trips/${trip.id}/activities`)
       ]);
 
       if (!isMounted) return;
@@ -112,24 +112,28 @@ export default function TripDashboard() {
   }, [trip?.id]);
 
   const tripMembers = trip?.members || [];
-  const tripBudget = trip?.budget == null ? 200000 : Number(trip.budget);
+  const tripBudget = trip?.budget == null ? null : Number(trip.budget);
   
   const recordedSpend = useMemo(() => {
-    if (!expenses || expenses.length === 0) return 170000;
+    if (!expenses) return null;
     return expenses
       .filter((expense) => !['REJECTED', 'DISPUTED'].includes(expense.status))
       .reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
   }, [expenses]);
 
   const hiddenCostsTotal = budgetSummary?.hiddenCosts != null ? Number(budgetSummary.hiddenCosts) : 0;
-  const remainingBudget = Math.max(0, tripBudget - recordedSpend);
-  const budgetPercent = tripBudget > 0 ? Math.round((recordedSpend / tripBudget) * 100) : 85;
+  const remainingBudget = tripBudget != null && recordedSpend != null
+    ? Math.max(0, tripBudget - recordedSpend)
+    : null;
+  const budgetPercent = tripBudget > 0 && recordedSpend != null
+    ? Math.round((recordedSpend / tripBudget) * 100)
+    : 0;
   const progressWidth = Math.min(100, Math.max(0, budgetPercent));
 
   const nextPlan = useMemo(() => getCurrentOrNextPlan(itineraryDays), [itineraryDays]);
   const featuredPoll = polls?.find((poll) => !poll.isLocked) || polls?.[0] || null;
 
-  const dateRange = [formatTripDate(trip?.startDate) || '26 October 2026', formatTripDate(trip?.endDate) || '31 October 2026'].filter(Boolean).join(' – ');
+  const dateRange = [formatTripDate(trip?.startDate), formatTripDate(trip?.endDate)].filter(Boolean).join(' – ') || 'Trip dates not set';
 
   if (!trip) return null;
 
@@ -201,7 +205,7 @@ export default function TripDashboard() {
                 </div>
                 <div className="text-left text-xs leading-tight">
                   <span className="block text-white/70 font-medium">Travelers</span>
-                  <span className="font-bold text-sm">{tripMembers.length || 5}</span>
+                  <span className="font-bold text-sm">{tripMembers.length}</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-white/70" />
               </Link>
@@ -236,7 +240,7 @@ export default function TripDashboard() {
               <div>
                 <p className="text-[11px] font-semibold text-slate-500">Total Budget</p>
                 <p className="text-base sm:text-lg font-black text-slate-800">
-                  ₹{tripBudget.toLocaleString()}
+                  {tripBudget == null ? '—' : `₹${tripBudget.toLocaleString()}`}
                 </p>
               </div>
             </div>
@@ -249,7 +253,7 @@ export default function TripDashboard() {
               <div>
                 <p className="text-[11px] font-semibold text-slate-500">Spent</p>
                 <p className="text-base sm:text-lg font-black text-rose-600">
-                  ₹{recordedSpend.toLocaleString()}
+                  {recordedSpend == null ? '—' : `₹${recordedSpend.toLocaleString()}`}
                 </p>
               </div>
             </div>
@@ -262,7 +266,7 @@ export default function TripDashboard() {
               <div>
                 <p className="text-[11px] font-semibold text-slate-500">Remaining</p>
                 <p className="text-base sm:text-lg font-black text-emerald-700">
-                  ₹{remainingBudget.toLocaleString()}
+                  {remainingBudget == null ? '—' : `₹${remainingBudget.toLocaleString()}`}
                 </p>
               </div>
             </div>
@@ -325,8 +329,12 @@ export default function TripDashboard() {
                 <div className="flex items-center gap-3">
                   <span className="text-4xl">🌤️</span>
                   <div>
-                    <span className="text-4xl font-black text-slate-800">28°</span>
-                    <span className="text-xs text-slate-500 font-semibold block">Partly Cloudy</span>
+                    <span className="text-4xl font-black text-slate-800">
+                      {weatherSummary?.currentTemperature == null ? '—' : `${Math.round(weatherSummary.currentTemperature)}°`}
+                    </span>
+                    <span className="text-xs text-slate-500 font-semibold block">
+                      {weatherError ? 'Weather unavailable' : weatherSummary?.currentCondition || 'Loading live weather...'}
+                    </span>
                     <span className="text-[11px] text-teal font-bold flex items-center gap-1 mt-0.5">
                       <MapPin className="w-3 h-3" /> {trip.destination}, India
                     </span>
@@ -336,23 +344,15 @@ export default function TripDashboard() {
                 <div className="flex items-center gap-5 sm:gap-7 text-xs font-semibold text-slate-600 border-t sm:border-t-0 sm:border-l border-slate-200/80 pt-3 sm:pt-0 sm:pl-7">
                   <div>
                     <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Feels Like</span>
-                    <span className="text-sm font-bold text-slate-700">🌡️ 32°</span>
+                    <span className="text-sm font-bold text-slate-700">
+                      {weatherSummary?.windSpeed == null ? '—' : `💨 ${weatherSummary.windSpeed} km/h`}
+                    </span>
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Humidity</span>
-                    <span className="text-sm font-bold text-slate-700">💧 78%</span>
-                  </div>
-                  <div>
-                    <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Wind</span>
-                    <span className="text-sm font-bold text-slate-700">💨 12 km/h</span>
-                  </div>
-                  <div className="hidden sm:block">
-                    <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Sunrise</span>
-                    <span className="text-sm font-bold text-slate-700">🌅 06:12 AM</span>
-                  </div>
-                  <div className="hidden sm:block">
-                    <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Sunset</span>
-                    <span className="text-sm font-bold text-slate-700">🌇 05:45 PM</span>
+                    <span className="block text-[10px] text-slate-400 uppercase tracking-wider">Rain chance</span>
+                    <span className="text-sm font-bold text-slate-700">
+                      {weatherSummary?.rainProbability == null ? '—' : `🌧️ ${weatherSummary.rainProbability}%`}
+                    </span>
                   </div>
                 </div>
               </div>

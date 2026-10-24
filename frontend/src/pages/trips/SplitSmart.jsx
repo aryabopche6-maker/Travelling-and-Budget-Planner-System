@@ -307,9 +307,9 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
     title: '',
     amount: '',
     category: 'Food',
-    paidById: currentUser?.id || '',
+    paidById: currentUser?.id == null ? '' : String(currentUser.id),
     splitType: 'EQUAL', // EQUAL, EXACT, PERCENTAGE, SELECTED
-    participants: members.map(m => m.id),
+    participants: members.map(m => String(m.id)),
     customSplits: {}, // { [memberId]: amount or percentage }
     date: new Date().toISOString().split('T')[0],
     disputeReason: '',
@@ -432,8 +432,9 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
       }
     }
 
-    const payer = members.find(m => m.id === form.paidById);
-    onAdd({
+    const payer = members.find(m => String(m.id) === String(form.paidById));
+    try {
+      await onAdd({
       id: `e${Date.now()}`,
       title: form.title.trim(),
       amount: totalAmount,
@@ -450,8 +451,11 @@ function AddExpenseModal({ members, currentUser, tripId, onAdd, onClose }) {
       history: [
         { action: 'CREATED', actorName: currentUser?.name || 'You', timestamp: new Date().toISOString() }
       ]
-    });
-    onClose();
+      });
+      onClose();
+    } catch (submitError) {
+      setError(submitError.response?.data?.message || 'Could not save the expense. Please try again.');
+    }
   };
 
   return (
@@ -1342,14 +1346,42 @@ function ExpenseHistoryModal({ expense, onClose }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 const FILTER_TABS = ['ALL', 'PENDING', 'DISPUTED', 'SETTLED'];
 
+const mapExpense = (expense) => ({
+  id: String(expense.id),
+  title: expense.title,
+  amount: Number(expense.amount) || 0,
+  category: expense.category || 'Misc',
+  paidById: String(expense.paidBy),
+  paidByName: expense.paidByName || 'Trip member',
+  date: expense.date || expense.createdAt?.slice(0, 10) || '',
+  status: expense.status || 'PENDING',
+  splitType: expense.splitType || 'EQUAL',
+  participants: (expense.splits || []).map((split) => String(split.userId)),
+  splits: (expense.splits || []).map((split) => ({
+    ...split,
+    userId: String(split.userId),
+    isPaid: Boolean(split.isPaid)
+  })),
+  disputeReason: expense.disputeReason || '',
+  proofUrl: expense.proofUrl || null,
+  history: expense.createdAt
+    ? [{ action: 'CREATED', actorName: expense.paidByName || 'Trip member', timestamp: expense.createdAt }]
+    : [],
+  disputeResponses: []
+});
+
 export default function SplitSmart() {
   const { trip, isTripAdmin } = useTrip();
   const { user } = useAuth();
 
-  const members = Array.isArray(trip?.members) ? trip.members : [];
-  const currentUserId = user?.id || '1';
+  const members = Array.isArray(trip?.members)
+    ? trip.members.map((member) => ({ ...member, id: String(member.userId ?? member.id) }))
+    : [];
+  const currentUserId = user?.id == null ? '' : String(user.id);
 
-  const [expenses, setExpenses] = useState(() => seed(members));
+  const [expenses, setExpenses] = useState([]);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
+  const [expenseError, setExpenseError] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [disputeTarget, setDisputeTarget] = useState(null);
@@ -1360,6 +1392,27 @@ export default function SplitSmart() {
   const [reminderToast, setReminderToast] = useState(null);
   const [disputeResponseText, setDisputeResponseText] = useState('');
   const [activeDisputeResponseId, setActiveDisputeResponseId] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!trip?.id) {
+      setIsLoadingExpenses(false);
+      return () => { isMounted = false; };
+    }
+    setIsLoadingExpenses(true);
+    expenseService.getExpenses(trip.id)
+      .then((data) => {
+        if (isMounted) setExpenses(data.map(mapExpense));
+      })
+      .catch((error) => {
+        console.error('Failed to load trip expenses:', error);
+        if (isMounted) setExpenseError(error.response?.data?.message || 'Could not load trip expenses.');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingExpenses(false);
+      });
+    return () => { isMounted = false; };
+  }, [trip?.id]);
 
   // ── balance calculation ──────────────────────────────────────────────────
   const { totalOwed, totalOwing, details: balanceDetails } = useMemo(
@@ -1497,46 +1550,86 @@ export default function SplitSmart() {
   });
 
   // ── actions ──────────────────────────────────────────────────────────────
-  const updateStatus = (id, status, extra = {}) =>
-    setExpenses(es => es.map(e => {
-      if (e.id !== id) return e;
-      const historyEntry = {
-        action: status,
-        actorName: currentUserName,
-        timestamp: new Date().toISOString(),
-        details: extra.disputeReason ? `Reason: ${extra.disputeReason}` : undefined
-      };
-      return {
-        ...e,
-        status,
-        ...extra,
-        history: [...(e.history || []), historyEntry]
-      };
-    }));
-
-  const deleteExpense = (id) => setExpenses(es => es.filter(e => e.id !== id));
-
-  const addExpense = (exp) => setExpenses(es => [exp, ...es]);
-
-  const settleWithPeople = (personIds) => {
-    // Mark as SETTLED all expenses where those people paid and I owe them
-    setExpenses(es => es.map(e => {
-      if (e.status === 'SETTLED') return e;
-      if (personIds.includes(e.paidById) && e.participants.includes(currentUserId)) {
-        const historyEntry = {
-          action: 'SETTLED',
-          actorName: currentUserName,
-          timestamp: new Date().toISOString(),
-          details: `Settled with ${e.paidByName}`
-        };
-        return {
-          ...e,
-          status: 'SETTLED',
-          history: [...(e.history || []), historyEntry]
-        };
+  const updateStatus = async (id, status, extra = {}) => {
+    if (!trip?.id) return;
+    try {
+      setExpenseError('');
+      let savedExpense;
+      if (status === 'ACCEPTED') {
+        savedExpense = await expenseService.approveExpense(trip.id, id);
+      } else if (status === 'DISPUTED') {
+        const reason = [
+          extra.disputeReason,
+          extra.disputeCategory && `Category: ${extra.disputeCategory}`,
+          extra.disputeEvidence && `Evidence: ${extra.disputeEvidence}`
+        ].filter(Boolean).join(' | ');
+        savedExpense = await expenseService.disputeExpense(trip.id, id, reason);
+      } else if (status === 'REJECTED') {
+        savedExpense = await expenseService.rejectExpense(trip.id, id);
+      } else if (status === 'SETTLED') {
+        savedExpense = await expenseService.settleExpense(trip.id, id);
+      } else {
+        throw new Error(`Unsupported expense status: ${status}`);
       }
-      return e;
-    }));
+      const mappedExpense = mapExpense(savedExpense);
+      setExpenses((previous) => previous.map((expense) => expense.id === mappedExpense.id ? mappedExpense : expense));
+    } catch (error) {
+      console.error('Failed to update expense status:', error);
+      setExpenseError(error.response?.data?.message || error.message || 'Could not update this expense.');
+    }
+  };
+
+  const deleteExpense = async (id) => {
+    if (!trip?.id) return;
+    try {
+      setExpenseError('');
+      await expenseService.deleteExpense(trip.id, id);
+      setExpenses((previous) => previous.filter((expense) => expense.id !== String(id)));
+    } catch (error) {
+      console.error('Failed to delete expense:', error);
+      setExpenseError(error.response?.data?.message || 'Could not delete this expense.');
+    }
+  };
+
+  const addExpense = async (expense) => {
+    const savedExpense = await expenseService.addExpense(trip.id, {
+      title: expense.title,
+      amount: expense.amount,
+      paidBy: Number(expense.paidById),
+      date: expense.date,
+      category: expense.category,
+      splitType: expense.splitType,
+      proofUrl: expense.proofUrl,
+      splits: expense.splits.map((split) => ({
+        userId: Number(split.userId),
+        userName: split.userName,
+        amount: split.amount
+      }))
+    });
+    setExpenses((previous) => [mapExpense(savedExpense), ...previous]);
+  };
+
+  const settleWithPeople = async (personIds) => {
+    if (!trip?.id) return;
+    const targetExpenses = expenses.filter((expense) =>
+      expense.status !== 'SETTLED'
+      && personIds.map(String).includes(String(expense.paidById))
+      && expense.participants.includes(currentUserId)
+    );
+    try {
+      setExpenseError('');
+      const settledExpenses = await Promise.all(targetExpenses.map((expense) =>
+        expenseService.settleExpense(trip.id, expense.id)
+      ));
+      const mappedExpenses = new Map(settledExpenses.map((expense) => {
+        const mapped = mapExpense(expense);
+        return [mapped.id, mapped];
+      }));
+      setExpenses((previous) => previous.map((expense) => mappedExpenses.get(expense.id) || expense));
+    } catch (error) {
+      console.error('Failed to settle expenses:', error);
+      setExpenseError(error.response?.data?.message || 'Could not settle selected expenses.');
+    }
   };
 
   if (!trip) return null;
@@ -1562,6 +1655,15 @@ export default function SplitSmart() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {expenseError && (
+        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {expenseError}
+        </p>
+      )}
+      {isLoadingExpenses && (
+        <p role="status" className="py-4 text-center text-sm text-muted">Loading trip expenses...</p>
+      )}
 
       {/* ── Modern Premium Page Header ── */}
       <Reveal>
@@ -2126,7 +2228,7 @@ export default function SplitSmart() {
                             <div className="pt-2 flex gap-3 justify-end border-t border-amber-200/80">
                               <Button
                                 variant="outline"
-                                onClick={() => updateStatus(exp.id, 'PENDING')}
+                                onClick={() => updateStatus(exp.id, 'REJECTED')}
                                 className="border-red-300 text-red-600 hover:bg-red-50 text-xs py-1.5 font-bold"
                               >
                                 <X className="w-3.5 h-3.5 mr-1" /> Reject Dispute

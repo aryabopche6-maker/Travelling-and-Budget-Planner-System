@@ -59,6 +59,8 @@ app:
 $env:PLACES_API_KEY="your_geoapify_key"
 $env:AMADEUS_CLIENT_ID="your_amadeus_client_id"
 $env:AMADEUS_CLIENT_SECRET="your_amadeus_client_secret"
+$env:JWT_SECRET="set-a-unique-cryptographically-random-secret"
+$env:CORS_ORIGIN="https://travelling-and-budget-planner-syste.vercel.app"
 $env:FRONTEND_URL="https://your-deployed-app.example"
 $env:MAIL_HOST="smtp.gmail.com"
 $env:MAIL_PORT="587"
@@ -66,7 +68,7 @@ $env:MAIL_USERNAME="your_sender@gmail.com"
 $env:MAIL_PASSWORD="your_smtp_or_app_password"
 mvn spring-boot:run
 ```
-Email invitations require SMTP configuration. For Gmail, use an app password rather than your account password. If SMTP is unavailable, the invitation is still created and the response includes `emailSent: false` and an acceptance link that the trip admin can share manually. `FRONTEND_URL` is used to build invitation acceptance links; use the deployed frontend URL when inviting people to a deployed backend.
+Generate a unique `JWT_SECRET` for each deployment and configure it in the backend hosting provider; do not commit it to source control. `CORS_ORIGIN` accepts a comma-separated list of exact browser origins. Email invitations require SMTP configuration. For Gmail, use a newly generated app password rather than an account password. If SMTP is unavailable, the invitation is still created and the response includes `emailSent: false` and an acceptance link that the trip admin can share manually. `FRONTEND_URL` is used to build invitation acceptance links; use the deployed frontend URL when inviting people to a deployed backend.
 SOS does not use a paid SMS gateway. It prepares an SMS message on the device; the user must open their SMS app and press Send. Normal mobile-carrier SMS charges may apply. The database records the contact and that manual confirmation is pending; the application cannot verify whether the user ultimately sent the message or whether it was delivered.
 
 ---
