@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ShieldAlert, CheckCircle2, Plus, ArrowRight, Lightbulb, Wallet, Plane, Building, Utensils, HeartPulse } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  ShieldAlert, CheckCircle2, Plus, ArrowRight, Lightbulb, Wallet, 
+  Plane, Building, Utensils, HeartPulse, Sparkles, TrendingUp, AlertTriangle, Check
+} from 'lucide-react';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -11,89 +14,71 @@ import { budgetService } from '../../services/budgetService';
 const hiddenCostCatalog = [
   {
     id: 'transport',
-    title: 'Transportation',
+    title: 'Transportation Buffers',
+    subtitle: 'Transit, transfers & airport contingencies',
+    gradient: 'from-sky-500/15 via-blue-500/10 to-indigo-500/5',
+    accent: '#0284C7',
     items: [
-      { id: 't1', category: 'Transportation', name: 'Airport Transfer (Round Trip)', amount: 3500, description: 'Taxi or shuttle to and from the airport.' },
-      { id: 't2', category: 'Transportation', name: 'Local Transport Buffer', amount: 2000, description: 'Unexpected cab rides or subway tickets.' },
+      { id: 't1', category: 'Transportation', name: 'Airport Transfer (Round Trip)', amount: 3500, description: 'Taxi or airport express shuttle to and from the terminal.' },
+      { id: 't2', category: 'Transportation', name: 'Local Transit & Cab Buffer', amount: 2000, description: 'Surge pricing, late night rides, and local city metro tokens.' },
     ]
   },
   {
     id: 'accommodation',
-    title: 'Accommodation',
+    title: 'Stay & Hotel Buffers',
+    subtitle: 'City taxes, baggage storage & late checkout',
+    gradient: 'from-teal-500/15 via-emerald-500/10 to-teal-500/5',
+    accent: '#0D9488',
     items: [
-      { id: 'a1', category: 'Accommodation', name: 'City Tax / Resort Fee', amount: 1500, description: 'Often charged per night directly at the hotel.' },
-      { id: 'a2', category: 'Accommodation', name: 'Late Checkout Fee', amount: 2000, description: 'Just in case your flight is late in the evening.' },
+      { id: 'a1', category: 'Accommodation', name: 'City Tax & Resort Service Fee', amount: 1500, description: 'Compulsory municipal tourist tax charged upon hotel arrival.' },
+      { id: 'a2', category: 'Accommodation', name: 'Late Checkout & Luggage Hold', amount: 2000, description: 'Keeps you comfortable if your flight departs late in the evening.' },
     ]
   },
   {
     id: 'food',
-    title: 'Food & Dining',
+    title: 'Dining & Refreshments',
+    subtitle: 'Gratuity, hydration & impromptu tastings',
+    gradient: 'from-amber-500/15 via-orange-500/10 to-rose-500/5',
+    accent: '#EA580C',
     items: [
-      { id: 'f1', category: 'Food & Dining', name: 'Tipping Buffer', amount: 2500, description: 'Extra budget for tipping at restaurants and tours.' },
-      { id: 'f2', category: 'Food & Dining', name: 'Bottled Water & Snacks', amount: 1000, description: 'Daily convenience store runs.' },
+      { id: 'f1', category: 'Food & Dining', name: 'Tipping & Gratuity Reserve', amount: 2500, description: 'Standard tipping buffer for local guides, drivers, and fine restaurants.' },
+      { id: 'f2', category: 'Food & Dining', name: 'Mineral Water & Daily Snacks', amount: 1000, description: 'Convenience stores, hydration packs, and trail refreshments.' },
     ]
   },
   {
     id: 'contingency',
-    title: 'Emergency & Contingency',
+    title: 'Health & Emergencies',
+    subtitle: 'First aid, travel insurance & peace of mind',
+    gradient: 'from-rose-500/15 via-pink-500/10 to-red-500/5',
+    accent: '#E11D48',
     items: [
-      { id: 'c1', category: 'Emergency', name: 'Medical & First Aid Buffer', amount: 1500, description: 'Emergency medicines and pharmacy visits.' },
-      { id: 'c2', category: 'Emergency', name: 'General Contingency Reserve', amount: 3500, description: 'Flexible safety net for unplanned events.' }
+      { id: 'c1', category: 'Emergency', name: 'First Aid & Medical Buffer', amount: 1500, description: 'Altitude sickness meds, emergency pharmacy runs, and hydration salts.' },
+      { id: 'c2', category: 'Emergency', name: 'Universal Contingency Reserve', amount: 3500, description: 'Flexible safety cushion for unpredicted events, itinerary modifications.' }
     ]
   }
 ];
 
-const categoryStyles = {
-  transport: {
-    icon: Plane,
-    iconClass: 'bg-sky-100 text-sky-700',
-    borderClass: 'border-sky-200',
-    selectedClass: 'bg-sky-50 border-sky-400 shadow-sky-100',
-    selectedTextClass: 'text-sky-800',
-    selectedCheckClass: 'border-sky-600 bg-sky-600'
-  },
-  accommodation: {
-    icon: Building,
-    iconClass: 'bg-teal-100 text-teal-700',
-    borderClass: 'border-teal-200',
-    selectedClass: 'bg-teal-50 border-teal-400 shadow-teal-100',
-    selectedTextClass: 'text-teal-800',
-    selectedCheckClass: 'border-teal-700 bg-teal-700'
-  },
-  food: {
-    icon: Utensils,
-    iconClass: 'bg-orange-100 text-orange-700',
-    borderClass: 'border-orange-200',
-    selectedClass: 'bg-orange-50 border-orange-400 shadow-orange-100',
-    selectedTextClass: 'text-orange-800',
-    selectedCheckClass: 'border-orange-600 bg-orange-600'
-  },
-  contingency: {
-    icon: HeartPulse,
-    iconClass: 'bg-rose-100 text-rose-700',
-    borderClass: 'border-rose-200',
-    selectedClass: 'bg-rose-50 border-rose-400 shadow-rose-100',
-    selectedTextClass: 'text-rose-800',
-    selectedCheckClass: 'border-rose-600 bg-rose-600'
-  }
+const categoryIcons = {
+  transport: Plane,
+  accommodation: Building,
+  food: Utensils,
+  contingency: HeartPulse
 };
 
 export default function HiddenCosts() {
   const { trip } = useTrip();
   const navigate = useNavigate();
 
-  const [addedCosts, setAddedCosts] = useState(['t1', 'a1']); // Local selection
+  const [addedCosts, setAddedCosts] = useState(['t1', 'a1']);
   const [isUpdating, setIsUpdating] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [existingCosts, setExistingCosts] = useState([]);
 
-  // Load existing hidden costs from backend
   useEffect(() => {
     if (!trip?.id) return;
     budgetService.getBudget(trip.id).then((res) => {
       if (res && res.hiddenCostItems) {
         setExistingCosts(res.hiddenCostItems);
-        // Pre-select items matching existing items if any
         const matched = [];
         hiddenCostCatalog.flatMap(c => c.items).forEach(item => {
           if (res.hiddenCostItems.some(h => h.description === item.name)) {
@@ -113,6 +98,15 @@ export default function HiddenCosts() {
     );
   };
 
+  const selectAll = () => {
+    const allIds = hiddenCostCatalog.flatMap(c => c.items.map(i => i.id));
+    setAddedCosts(allIds);
+  };
+
+  const clearAll = () => {
+    setAddedCosts([]);
+  };
+
   const allItems = hiddenCostCatalog.flatMap(c => c.items);
   const selectedItems = allItems.filter(item => addedCosts.includes(item.id));
   const totalAdded = selectedItems.reduce((sum, item) => sum + item.amount, 0);
@@ -123,14 +117,12 @@ export default function HiddenCosts() {
     setSuccessMessage('');
 
     try {
-      // 1. Delete previous saved hidden costs to cleanly replace with current selection
       for (const cost of existingCosts) {
         if (cost.id) {
           await budgetService.deleteHiddenCost(trip.id, cost.id).catch(() => {});
         }
       }
 
-      // 2. Add each selected item to the backend budget
       for (const item of selectedItems) {
         await budgetService.addHiddenCost(trip.id, {
           category: item.category,
@@ -140,13 +132,12 @@ export default function HiddenCosts() {
         });
       }
 
-      setSuccessMessage('Hidden costs applied! Redirecting to Budget Overview...');
+      setSuccessMessage('Hidden costs successfully synced with Trip Budget!');
       setTimeout(() => {
         navigate(`/trips/${trip.id}/budget`);
       }, 1000);
     } catch (err) {
       console.error('Failed to apply hidden costs:', err);
-      // Fallback redirect anyway
       navigate(`/trips/${trip.id}/budget`);
     } finally {
       setIsUpdating(false);
@@ -154,147 +145,233 @@ export default function HiddenCosts() {
   };
 
   return (
-    <PageTransition variant="slideUp" className="max-w-5xl mx-auto space-y-8 pb-12">
+    <PageTransition variant="slideUp" className="max-w-5xl mx-auto space-y-8 pb-16">
+      {/* Cinematic Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="relative overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-white/95 via-[#F0FDF4]/90 to-[#E0F2FE]/80 p-8 shadow-2xl backdrop-blur-xl"
+      >
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-56 w-56 rounded-full bg-gradient-to-br from-teal/20 via-sky-400/15 to-transparent blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 -mb-10 h-40 w-40 rounded-full bg-coral/10 blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-start gap-5">
+            <motion.div
+              whileHover={{ rotate: 12, scale: 1.1 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 15 }}
+              className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-coral to-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-coral/30"
+            >
+              <ShieldAlert className="w-7 h-7" />
+            </motion.div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-coral/15 text-coral mb-2">
+                <Sparkles className="w-3.5 h-3.5" /> Smart Protection Scanner
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-charcoal font-display">
+                Hidden Costs & Safety Buffers
+              </h1>
+              <p className="text-muted mt-1.5 text-base max-w-xl">
+                Real-time safety cushion for your <span className="font-semibold text-charcoal">{trip?.destination || 'Upcoming'}</span> trip. Prevent unexpected holiday surprises.
+              </p>
+            </div>
+          </div>
+
+          <motion.div
+            whileHover={{ y: -4, scale: 1.02 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            className="flex flex-col items-end justify-center rounded-2xl border border-teal/20 bg-white/90 p-5 shadow-xl backdrop-blur-md min-w-[220px]"
+          >
+            <span className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5 text-teal" /> Protected Buffer
+            </span>
+            <div className="text-3xl font-black tracking-tight text-teal mt-1">
+              ₹{totalAdded.toLocaleString()}
+            </div>
+            <span className="text-[11px] font-medium text-muted mt-0.5">
+              {selectedItems.length} of {allItems.length} buffers active
+            </span>
+          </motion.div>
+        </div>
+
+        {/* Quick Toggle Controls */}
+        <div className="relative z-10 mt-6 pt-6 border-t border-charcoal/10 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={selectAll}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal/10 hover:bg-teal/20 text-teal transition-all"
+            >
+              Select All Recommendations
+            </button>
+            <button
+              onClick={clearAll}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-charcoal/5 hover:bg-charcoal/10 text-muted transition-all"
+            >
+              Clear Selection
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-medium text-muted">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-teal animate-pulse" />
+            Auto-calculated into your Budget Overview
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Insight Banner */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="relative flex flex-col md:flex-row md:items-end justify-between gap-4 overflow-hidden rounded-3xl border border-coral/15 bg-gradient-to-br from-[#F8F3E8] via-[#F2F7F1] to-[#EAF6F3] p-6 shadow-travel-md md:p-7"
-      >
-        <div className="flex items-center gap-4">
-          <motion.div
-            whileHover={{ rotate: -8, scale: 1.08 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 16 }}
-            className="w-12 h-12 bg-coral/10 text-coral rounded-xl flex items-center justify-center shrink-0 border border-coral/20 shadow-inner"
-          >
-            <ShieldAlert className="w-6 h-6" />
-          </motion.div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-charcoal">Hidden Costs Scanner</h1>
-            <p className="text-secondary mt-1">We've identified potential unexpected expenses for your {trip?.destination} trip.</p>
-          </div>
-        </div>
-        
-        <motion.div
-          whileHover={{ y: -3, scale: 1.02 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 20 }}
-          className="bg-[#FFFCF4]/90 p-4 rounded-xl border border-coral/20 text-right min-w-[200px] shadow-sm"
-        >
-          <p className="text-sm text-secondary font-medium">Selected Hidden Buffer</p>
-          <p className="text-2xl font-bold text-coral tracking-tight">₹{totalAdded.toLocaleString()}</p>
-        </motion.div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.35 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
         whileHover={{ y: -2 }}
-        className="bg-gradient-to-r from-[#E8F4EF] to-[#F5F2E8] border border-teal/20 rounded-2xl p-5 flex items-start gap-4 shadow-sm transition-shadow hover:shadow-travel"
+        className="relative overflow-hidden rounded-2xl border border-teal/25 bg-gradient-to-r from-teal/10 via-emerald-500/5 to-sky-500/10 p-5 shadow-md flex items-center gap-4"
       >
-        <motion.div whileHover={{ rotate: 12, scale: 1.1 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
-          <Lightbulb className="w-6 h-6 text-teal shrink-0 mt-0.5" />
-        </motion.div>
-        <div className="flex-1">
-          <h4 className="font-bold text-teal mb-1">Why is this important?</h4>
-          <p className="text-sm text-secondary leading-relaxed">
-            Most trips go over budget by 15-20% due to costs forgotten during planning. 
-            Select the buffers below and click <strong>Apply to Budget</strong> to include them in your <strong>Trip Budget Overview</strong> and total calculations.
-          </p>
+        <div className="w-10 h-10 rounded-xl bg-teal/20 text-teal flex items-center justify-center shrink-0">
+          <Lightbulb className="w-5 h-5" />
         </div>
+        <p className="text-sm text-charcoal/80 leading-relaxed">
+          <strong className="text-charcoal font-semibold">Smart Travel Rule:</strong> Trips usually exceed basic estimates by 15-20% due to incidental local transport, resort taxes, and emergency needs. Adding these buffers ensures your group never runs out of cash!
+        </p>
       </motion.div>
 
-      {successMessage && (
-        <motion.div
-          initial={{ opacity: 0, y: 8, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="bg-teal/15 border border-teal/30 text-teal p-4 rounded-xl flex items-center gap-3 font-medium"
-        >
-          <CheckCircle2 className="w-5 h-5 text-teal" />
-          <span>{successMessage}</span>
-        </motion.div>
-      )}
+      {/* Success Notification */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 font-semibold shadow-lg backdrop-blur-md"
+          >
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{successMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* Catalog Cards Grid */}
       <div className="grid grid-cols-1 gap-6">
-        {hiddenCostCatalog.map((category, index) => {
-          const theme = categoryStyles[category.id];
-          const CategoryIcon = theme.icon;
+        {hiddenCostCatalog.map((category, catIndex) => {
+          const CategoryIcon = categoryIcons[category.id] || ShieldAlert;
           return (
-            <Card
+            <motion.div
               key={category.id}
-              delay={index * 0.1}
-              hoverLift
-              gradientBorder
-              whileHover={{ y: -3 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-              className="p-6 !bg-[#F3F7F3] border-muted/30 shadow-sm"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: catIndex * 0.08, duration: 0.4 }}
+              className="rounded-3xl border border-charcoal/10 bg-white/80 backdrop-blur-md p-6 sm:p-7 shadow-xl hover:shadow-2xl transition-all duration-300 group"
             >
-                <div className="mb-6 flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${theme.iconClass}`}>
-                    <CategoryIcon className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-xl font-bold text-charcoal tracking-tight">{category.title}</h3>
-                </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {category.items.map(item => {
-                const isSelected = addedCosts.includes(item.id);
-                return (
-                  <motion.button
-                    key={item.id}
-                    type="button"
-                    onClick={() => toggleCost(item.id)}
-                    aria-pressed={isSelected}
-                    whileHover={{ y: -4, scale: 1.015 }}
-                    whileTap={{ scale: 0.985 }}
-                    transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-                    className={`p-4 rounded-xl border-2 text-left transition-colors duration-200 flex flex-col justify-between ${
-                      isSelected 
-                        ? `${theme.selectedClass} shadow-md`
-                        : `bg-[#FAF8F1] ${theme.borderClass} hover:shadow-md`
-                    }`}
+              {/* Category Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3.5">
+                  <div 
+                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md transition-transform duration-300 group-hover:scale-105"
+                    style={{ background: category.accent }}
                   >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="pr-4">
-                        <p className={`font-bold mb-1 transition-colors ${isSelected ? theme.selectedTextClass : 'text-charcoal'}`}>{item.name}</p>
-                        <p className="text-xs text-secondary">{item.description}</p>
+                    <CategoryIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-charcoal font-display tracking-tight">
+                      {category.title}
+                    </h3>
+                    <p className="text-xs text-muted font-medium">
+                      {category.subtitle}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items in Category */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {category.items.map(item => {
+                  const isSelected = addedCosts.includes(item.id);
+                  return (
+                    <motion.button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleCost(item.id)}
+                      whileHover={{ y: -4, scale: 1.015 }}
+                      whileTap={{ scale: 0.985 }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 20 }}
+                      className={`relative overflow-hidden p-5 rounded-2xl border-2 text-left transition-all duration-200 flex flex-col justify-between ${
+                        isSelected 
+                          ? 'border-teal bg-gradient-to-br from-teal/10 via-emerald-500/5 to-white shadow-lg shadow-teal/15 ring-2 ring-teal/20'
+                          : 'border-charcoal/10 bg-gradient-to-br from-white to-slate-50/70 hover:border-teal/40 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-3 gap-3">
+                        <div className="pr-2">
+                          <p className={`font-bold text-base transition-colors ${isSelected ? 'text-teal' : 'text-charcoal'}`}>
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-muted mt-1 leading-relaxed">
+                            {item.description}
+                          </p>
+                        </div>
+                        <div 
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
+                            isSelected 
+                              ? 'border-teal bg-teal text-white shadow-md shadow-teal/30 scale-105' 
+                              : 'border-muted/30 text-muted hover:border-teal hover:text-teal'
+                          }`}
+                        >
+                          {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 stroke-[2.5]" />}
+                        </div>
                       </div>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected ? `${theme.selectedCheckClass} text-white` : 'border-muted/30 text-secondary'
-                      }`}>
-                        {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+
+                      <div className="mt-3 pt-3 border-t border-charcoal/10 flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+                          Recommended Buffer
+                        </span>
+                        <span className={`font-black text-lg ${isSelected ? 'text-teal' : 'text-charcoal'}`}>
+                          ₹{item.amount.toLocaleString()}
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-2 pt-3 border-t border-muted/50 flex justify-between items-center">
-                      <span className="text-xs font-medium text-secondary uppercase tracking-wider">Estimated Cost</span>
-                      <span className={`font-bold text-lg ${isSelected ? theme.selectedTextClass : 'text-charcoal'}`}>₹{item.amount.toLocaleString()}</span>
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
-            </Card>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
           );
         })}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-muted/30">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate(`/trips/${trip.id}/budget`)}
-          className="w-full sm:w-auto"
-        >
-          Cancel & Return to Overview
-        </Button>
+      {/* Floating Bottom Sticky Action Bar */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky bottom-6 z-30 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-white/50 bg-white/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-teal/15 text-teal flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Buffer Total</p>
+            <p className="text-xl font-black text-charcoal">
+              ₹{totalAdded.toLocaleString()} <span className="text-xs font-normal text-muted">({selectedItems.length} categories)</span>
+            </p>
+          </div>
+        </div>
 
-        <Button 
-          onClick={handleApply} 
-          isLoading={isUpdating} 
-          className="w-full sm:w-auto px-10 bg-teal hover:bg-teal-600 text-white shadow-lg shadow-teal/20"
-        >
-          Apply to Budget ({selectedItems.length} Selected • ₹{totalAdded.toLocaleString()})
-        </Button>
-      </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate(`/trips/${trip?.id}/budget`)}
+            className="flex-1 sm:flex-none border-charcoal/20 hover:bg-charcoal/5"
+          >
+            Cancel
+          </Button>
+
+          <Button 
+            onClick={handleApply} 
+            isLoading={isUpdating} 
+            className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-teal to-emerald-600 hover:from-bright hover:to-teal text-white shadow-xl shadow-teal/30 font-bold rounded-xl transition-all"
+          >
+            Save & Sync to Budget <ArrowRight className="w-4 h-4 ml-1.5 inline" />
+          </Button>
+        </div>
+      </motion.div>
     </PageTransition>
   );
 }
