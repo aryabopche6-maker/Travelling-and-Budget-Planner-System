@@ -16,8 +16,13 @@ const hiddenCostCatalog = [
     id: 'transport',
     title: 'Transportation Buffers',
     subtitle: 'Transit, transfers & airport contingencies',
-    gradient: 'from-sky-500/15 via-blue-500/10 to-indigo-500/5',
-    accent: '#0284C7',
+    badgeText: 'Transit Risk: High',
+    badgeClass: 'bg-sky-500/15 text-sky-700 border-sky-300/40',
+    iconGradient: 'from-sky-500 to-blue-600',
+    cardBorderSelected: 'border-sky-500 ring-4 ring-sky-500/20 shadow-sky-500/25',
+    cardGradientSelected: 'bg-gradient-to-br from-sky-50 via-white to-blue-50/70',
+    selectedBadgeColor: 'bg-sky-600 text-white shadow-sky-500/40',
+    textHighlight: 'text-sky-700',
     items: [
       { id: 't1', category: 'Transportation', name: 'Airport Transfer (Round Trip)', amount: 3500, description: 'Taxi or airport express shuttle to and from the terminal.' },
       { id: 't2', category: 'Transportation', name: 'Local Transit & Cab Buffer', amount: 2000, description: 'Surge pricing, late night rides, and local city metro tokens.' },
@@ -27,8 +32,13 @@ const hiddenCostCatalog = [
     id: 'accommodation',
     title: 'Stay & Hotel Buffers',
     subtitle: 'City taxes, baggage storage & late checkout',
-    gradient: 'from-teal-500/15 via-emerald-500/10 to-teal-500/5',
-    accent: '#0D9488',
+    badgeText: 'Incidental Risk: Moderate',
+    badgeClass: 'bg-teal-500/15 text-teal-800 border-teal-300/40',
+    iconGradient: 'from-teal-500 to-emerald-600',
+    cardBorderSelected: 'border-teal ring-4 ring-teal/20 shadow-teal/25',
+    cardGradientSelected: 'bg-gradient-to-br from-teal-50/80 via-white to-emerald-50/60',
+    selectedBadgeColor: 'bg-teal text-white shadow-teal/40',
+    textHighlight: 'text-teal-800',
     items: [
       { id: 'a1', category: 'Accommodation', name: 'City Tax & Resort Service Fee', amount: 1500, description: 'Compulsory municipal tourist tax charged upon hotel arrival.' },
       { id: 'a2', category: 'Accommodation', name: 'Late Checkout & Luggage Hold', amount: 2000, description: 'Keeps you comfortable if your flight departs late in the evening.' },
@@ -38,8 +48,13 @@ const hiddenCostCatalog = [
     id: 'food',
     title: 'Dining & Refreshments',
     subtitle: 'Gratuity, hydration & impromptu tastings',
-    gradient: 'from-amber-500/15 via-orange-500/10 to-rose-500/5',
-    accent: '#EA580C',
+    badgeText: 'Daily Buffer',
+    badgeClass: 'bg-amber-500/15 text-amber-800 border-amber-300/40',
+    iconGradient: 'from-amber-500 to-orange-600',
+    cardBorderSelected: 'border-amber-500 ring-4 ring-amber-500/20 shadow-amber-500/25',
+    cardGradientSelected: 'bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60',
+    selectedBadgeColor: 'bg-amber-600 text-white shadow-amber-500/40',
+    textHighlight: 'text-amber-800',
     items: [
       { id: 'f1', category: 'Food & Dining', name: 'Tipping & Gratuity Reserve', amount: 2500, description: 'Standard tipping buffer for local guides, drivers, and fine restaurants.' },
       { id: 'f2', category: 'Food & Dining', name: 'Mineral Water & Daily Snacks', amount: 1000, description: 'Convenience stores, hydration packs, and trail refreshments.' },
@@ -49,8 +64,13 @@ const hiddenCostCatalog = [
     id: 'contingency',
     title: 'Health & Emergencies',
     subtitle: 'First aid, travel insurance & peace of mind',
-    gradient: 'from-rose-500/15 via-pink-500/10 to-red-500/5',
-    accent: '#E11D48',
+    badgeText: 'Safety Critical',
+    badgeClass: 'bg-rose-500/15 text-rose-800 border-rose-300/40',
+    iconGradient: 'from-rose-500 to-red-600',
+    cardBorderSelected: 'border-rose-500 ring-4 ring-rose-500/20 shadow-rose-500/25',
+    cardGradientSelected: 'bg-gradient-to-br from-rose-50/80 via-white to-red-50/60',
+    selectedBadgeColor: 'bg-rose-600 text-white shadow-rose-500/40',
+    textHighlight: 'text-rose-800',
     items: [
       { id: 'c1', category: 'Emergency', name: 'First Aid & Medical Buffer', amount: 1500, description: 'Altitude sickness meds, emergency pharmacy runs, and hydration salts.' },
       { id: 'c2', category: 'Emergency', name: 'Universal Contingency Reserve', amount: 3500, description: 'Flexible safety cushion for unpredicted events, itinerary modifications.' }
@@ -145,75 +165,75 @@ export default function HiddenCosts() {
   };
 
   return (
-    <PageTransition variant="slideUp" className="max-w-5xl mx-auto space-y-8 pb-16">
-      {/* Cinematic Hero Header */}
+    <PageTransition variant="slideUp" className="max-w-5xl mx-auto space-y-8 pb-20">
+      {/* High-Contrast Hero Banner */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden rounded-3xl border border-white/60 bg-gradient-to-br from-white/95 via-[#F0FDF4]/90 to-[#E0F2FE]/80 p-8 shadow-2xl backdrop-blur-xl"
+        className="relative overflow-hidden rounded-3xl border-2 border-teal/20 bg-gradient-to-br from-[#0F766E] via-[#115E59] to-[#042F2E] p-8 sm:p-9 text-white shadow-2xl"
       >
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-56 w-56 rounded-full bg-gradient-to-br from-teal/20 via-sky-400/15 to-transparent blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 -mb-10 h-40 w-40 rounded-full bg-coral/10 blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-gradient-to-br from-amber-400/20 via-coral/20 to-transparent blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-12 h-48 w-48 rounded-full bg-teal-300/10 blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start gap-5">
             <motion.div
-              whileHover={{ rotate: 12, scale: 1.1 }}
+              whileHover={{ rotate: -10, scale: 1.1 }}
               transition={{ type: 'spring', stiffness: 350, damping: 15 }}
-              className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-coral to-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-coral/30"
+              className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF6B4A] to-[#F4B942] text-white flex items-center justify-center shrink-0 shadow-lg shadow-black/20"
             >
-              <ShieldAlert className="w-7 h-7" />
+              <ShieldAlert className="w-8 h-8 drop-shadow" />
             </motion.div>
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-coral/15 text-coral mb-2">
-                <Sparkles className="w-3.5 h-3.5" /> Smart Protection Scanner
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/15 text-amber-200 border border-white/20 mb-2.5 backdrop-blur-md">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Budget Armor & Safety Scanner
               </div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-charcoal font-display">
-                Hidden Costs & Safety Buffers
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-display drop-shadow-sm">
+                Hidden Costs & Contingency Buffers
               </h1>
-              <p className="text-muted mt-1.5 text-base max-w-xl">
-                Real-time safety cushion for your <span className="font-semibold text-charcoal">{trip?.destination || 'Upcoming'}</span> trip. Prevent unexpected holiday surprises.
+              <p className="text-teal-100/90 mt-1.5 text-base max-w-xl leading-relaxed">
+                Shield your <span className="font-bold text-white underline decoration-amber-400 decoration-2 underline-offset-4">{trip?.destination || 'Upcoming'}</span> adventure from surprise fees, surge cabs, and missed flights.
               </p>
             </div>
           </div>
 
           <motion.div
-            whileHover={{ y: -4, scale: 1.02 }}
+            whileHover={{ y: -4, scale: 1.03 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            className="flex flex-col items-end justify-center rounded-2xl border border-teal/20 bg-white/90 p-5 shadow-xl backdrop-blur-md min-w-[220px]"
+            className="flex flex-col items-end justify-center rounded-2xl border border-white/25 bg-white/10 p-5 shadow-2xl backdrop-blur-xl min-w-[220px]"
           >
-            <span className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <Wallet className="w-3.5 h-3.5 text-teal" /> Protected Buffer
+            <span className="text-xs font-bold text-teal-200 uppercase tracking-wider flex items-center gap-1.5">
+              <Wallet className="w-4 h-4 text-amber-300" /> Active Safety Net
             </span>
-            <div className="text-3xl font-black tracking-tight text-teal mt-1">
+            <div className="text-3xl sm:text-4xl font-black tracking-tight text-white mt-1 drop-shadow">
               ₹{totalAdded.toLocaleString()}
             </div>
-            <span className="text-[11px] font-medium text-muted mt-0.5">
-              {selectedItems.length} of {allItems.length} buffers active
+            <span className="text-xs font-semibold text-teal-100/80 mt-1 bg-white/15 px-2.5 py-0.5 rounded-full">
+              {selectedItems.length} of {allItems.length} buffers selected
             </span>
           </motion.div>
         </div>
 
         {/* Quick Toggle Controls */}
-        <div className="relative z-10 mt-6 pt-6 border-t border-charcoal/10 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+        <div className="relative z-10 mt-6 pt-6 border-t border-white/15 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={selectAll}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal/10 hover:bg-teal/20 text-teal transition-all"
+              className="text-xs font-bold px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all shadow-sm border border-white/20"
             >
-              Select All Recommendations
+              ✓ Select All Recommendations
             </button>
             <button
               onClick={clearAll}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-charcoal/5 hover:bg-charcoal/10 text-muted transition-all"
+              className="text-xs font-bold px-3.5 py-2 rounded-xl bg-black/20 hover:bg-black/30 text-teal-100 transition-all border border-white/10"
             >
-              Clear Selection
+              ✕ Clear Selection
             </button>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-muted">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-teal animate-pulse" />
-            Auto-calculated into your Budget Overview
+          <div className="flex items-center gap-2 text-xs font-medium text-teal-100">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            Directly updates your Trip Budget calculations
           </div>
         </div>
       </motion.div>
@@ -224,13 +244,13 @@ export default function HiddenCosts() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.4 }}
         whileHover={{ y: -2 }}
-        className="relative overflow-hidden rounded-2xl border border-teal/25 bg-gradient-to-r from-teal/10 via-emerald-500/5 to-sky-500/10 p-5 shadow-md flex items-center gap-4"
+        className="relative overflow-hidden rounded-2xl border-2 border-teal/20 bg-gradient-to-r from-[#E6F4F1] via-[#F4F9F8] to-[#FFF9F2] p-5 shadow-sm flex items-start sm:items-center gap-4"
       >
-        <div className="w-10 h-10 rounded-xl bg-teal/20 text-teal flex items-center justify-center shrink-0">
-          <Lightbulb className="w-5 h-5" />
+        <div className="w-11 h-11 rounded-xl bg-teal text-white flex items-center justify-center shrink-0 shadow-md">
+          <Lightbulb className="w-6 h-6 text-amber-300" />
         </div>
-        <p className="text-sm text-charcoal/80 leading-relaxed">
-          <strong className="text-charcoal font-semibold">Smart Travel Rule:</strong> Trips usually exceed basic estimates by 15-20% due to incidental local transport, resort taxes, and emergency needs. Adding these buffers ensures your group never runs out of cash!
+        <p className="text-sm text-charcoal leading-relaxed font-medium">
+          <strong className="text-teal font-bold">Pro Tip:</strong> 85% of travel groups go over budget because airport cabs, city hospitality taxes, and tips aren't budgeted upfront. Selecting these items ensures everyone chips in accurately!
         </p>
       </motion.div>
 
@@ -241,16 +261,16 @@ export default function HiddenCosts() {
             initial={{ opacity: 0, y: -10, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10 }}
-            className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 font-semibold shadow-lg backdrop-blur-md"
+            className="bg-emerald-600 text-white p-4 rounded-2xl flex items-center gap-3 font-semibold shadow-xl"
           >
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-6 h-6 text-white shrink-0" />
             <span>{successMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Catalog Cards Grid */}
-      <div className="grid grid-cols-1 gap-6">
+      {/* Catalog Cards Grid with High Contrast & Vivid Gradients */}
+      <div className="grid grid-cols-1 gap-7">
         {hiddenCostCatalog.map((category, catIndex) => {
           const CategoryIcon = categoryIcons[category.id] || ShieldAlert;
           return (
@@ -259,26 +279,29 @@ export default function HiddenCosts() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: catIndex * 0.08, duration: 0.4 }}
-              className="rounded-3xl border border-charcoal/10 bg-white/80 backdrop-blur-md p-6 sm:p-7 shadow-xl hover:shadow-2xl transition-all duration-300 group"
+              className="rounded-3xl border-2 border-slate-200/90 bg-white/95 backdrop-blur-md p-6 sm:p-7 shadow-xl hover:shadow-2xl transition-all duration-300 group"
             >
               {/* Category Header */}
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div className="flex items-center gap-3.5">
                   <div 
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-md transition-transform duration-300 group-hover:scale-105"
-                    style={{ background: category.accent }}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg bg-gradient-to-tr ${category.iconGradient} transition-transform duration-300 group-hover:scale-105`}
                   >
-                    <CategoryIcon className="w-5 h-5" />
+                    <CategoryIcon className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-charcoal font-display tracking-tight">
+                    <h3 className="text-xl font-extrabold text-charcoal font-display tracking-tight">
                       {category.title}
                     </h3>
-                    <p className="text-xs text-muted font-medium">
+                    <p className="text-xs text-slate-500 font-medium">
                       {category.subtitle}
                     </p>
                   </div>
                 </div>
+
+                <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${category.badgeClass}`}>
+                  {category.badgeText}
+                </span>
               </div>
 
               {/* Items in Category */}
@@ -295,35 +318,35 @@ export default function HiddenCosts() {
                       transition={{ type: 'spring', stiffness: 350, damping: 20 }}
                       className={`relative overflow-hidden p-5 rounded-2xl border-2 text-left transition-all duration-200 flex flex-col justify-between ${
                         isSelected 
-                          ? 'border-teal bg-gradient-to-br from-teal/10 via-emerald-500/5 to-white shadow-lg shadow-teal/15 ring-2 ring-teal/20'
-                          : 'border-charcoal/10 bg-gradient-to-br from-white to-slate-50/70 hover:border-teal/40 hover:shadow-md'
+                          ? `${category.cardBorderSelected} ${category.cardGradientSelected} shadow-xl`
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
                       }`}
                     >
                       <div className="flex justify-between items-start mb-3 gap-3">
                         <div className="pr-2">
-                          <p className={`font-bold text-base transition-colors ${isSelected ? 'text-teal' : 'text-charcoal'}`}>
+                          <p className={`font-extrabold text-base transition-colors ${isSelected ? category.textHighlight : 'text-charcoal'}`}>
                             {item.name}
                           </p>
-                          <p className="text-xs text-muted mt-1 leading-relaxed">
+                          <p className="text-xs text-slate-600 mt-1 leading-relaxed font-medium">
                             {item.description}
                           </p>
                         </div>
                         <div 
-                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
+                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200 ${
                             isSelected 
-                              ? 'border-teal bg-teal text-white shadow-md shadow-teal/30 scale-105' 
-                              : 'border-muted/30 text-muted hover:border-teal hover:text-teal'
+                              ? `${category.selectedBadgeColor} scale-110` 
+                              : 'border-slate-300 text-slate-400 bg-slate-50 hover:border-slate-400'
                           }`}
                         >
                           {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 stroke-[2.5]" />}
                         </div>
                       </div>
 
-                      <div className="mt-3 pt-3 border-t border-charcoal/10 flex justify-between items-center">
-                        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+                      <div className={`mt-3 pt-3 border-t flex justify-between items-center ${isSelected ? 'border-black/10' : 'border-slate-100'}`}>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                           Recommended Buffer
                         </span>
-                        <span className={`font-black text-lg ${isSelected ? 'text-teal' : 'text-charcoal'}`}>
+                        <span className={`font-black text-xl ${isSelected ? category.textHighlight : 'text-slate-800'}`}>
                           ₹{item.amount.toLocaleString()}
                         </span>
                       </div>
@@ -340,16 +363,16 @@ export default function HiddenCosts() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="sticky bottom-6 z-30 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-white/50 bg-white/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl"
+        className="sticky bottom-6 z-30 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border-2 border-teal/30 bg-[#0F766E] text-white p-4 sm:p-5 shadow-2xl backdrop-blur-xl"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-teal/15 text-teal flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0 border border-white/20">
+            <TrendingUp className="w-6 h-6 text-amber-300" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Buffer Total</p>
-            <p className="text-xl font-black text-charcoal">
-              ₹{totalAdded.toLocaleString()} <span className="text-xs font-normal text-muted">({selectedItems.length} categories)</span>
+            <p className="text-xs font-bold text-teal-200 uppercase tracking-wider">Total Safety Reserve</p>
+            <p className="text-2xl font-black text-white">
+              ₹{totalAdded.toLocaleString()} <span className="text-xs font-medium text-teal-200">({selectedItems.length} categories active)</span>
             </p>
           </div>
         </div>
@@ -358,7 +381,7 @@ export default function HiddenCosts() {
           <Button 
             variant="outline" 
             onClick={() => navigate(`/trips/${trip?.id}/budget`)}
-            className="flex-1 sm:flex-none border-charcoal/20 hover:bg-charcoal/5"
+            className="flex-1 sm:flex-none !border-white/30 !text-white hover:!bg-white/10"
           >
             Cancel
           </Button>
@@ -366,7 +389,7 @@ export default function HiddenCosts() {
           <Button 
             onClick={handleApply} 
             isLoading={isUpdating} 
-            className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-teal to-emerald-600 hover:from-bright hover:to-teal text-white shadow-xl shadow-teal/30 font-bold rounded-xl transition-all"
+            className="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-amber-400 to-[#FF6B4A] hover:from-amber-300 hover:to-coral text-slate-950 shadow-xl shadow-black/20 font-extrabold rounded-xl transition-all"
           >
             Save & Sync to Budget <ArrowRight className="w-4 h-4 ml-1.5 inline" />
           </Button>
