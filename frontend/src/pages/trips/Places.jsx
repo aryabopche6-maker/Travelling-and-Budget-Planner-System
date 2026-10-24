@@ -357,7 +357,7 @@ export default function Places() {
                   <Card hoverLift className={`p-0 overflow-hidden flex flex-col group border-muted/30 hover:border-teal/30 shadow-md hover:shadow-xl hover:shadow-teal/10 cursor-pointer card-travel h-full ${isFeatured ? 'md:flex-row' : ''}`} onClick={() => setSelectedPlace({...place, _uniqueId: place.id || place.name || i})}>
                     <motion.div layoutId={`place-image-${place.id || place.name || i}`} className={`${isFeatured ? 'md:w-1/2' : ''} h-64 md:h-auto min-h-[250px] shrink-0 relative overflow-hidden bg-slate-900 flex items-center justify-center`}>
                       <img 
-                        src={getPlacePhoto(place, activeSearchArea || trip?.destination)} 
+                        src={getPlacePhoto(place, activeSearchArea || trip?.destination, i)} 
                         alt={place.name} 
                         className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-105" 
                       />
