@@ -1,6 +1,6 @@
 // src/utils/destinationImages.js
 // Curated pool of high-resolution landmark and attraction photos.
-// Uses deterministic hash on place name so every attraction gets a DISTINCT, beautiful image!
+// Uses deterministic hash on place/hotel name so every card gets a DISTINCT, beautiful image!
 
 const LANDMARK_COLLECTION = [
   'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?q=80&w=1200&auto=format&fit=crop', // Ancient fort / stepwell
@@ -19,6 +19,17 @@ const LANDMARK_COLLECTION = [
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop', // Tropical shoreline
   'https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?q=80&w=1200&auto=format&fit=crop', // Mountain valley & pine
   'https://images.unsplash.com/photo-1537996194471-e657df975ab4?q=80&w=1200&auto=format&fit=crop', // Sacred gate / monument
+];
+
+const HOTEL_COLLECTION = [
+  'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=1200&auto=format&fit=crop', // Luxury resort pool
+  'https://images.unsplash.com/photo-1582719508461-905c673771fd?q=80&w=1200&auto=format&fit=crop', // Elegant hotel room
+  'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=1200&auto=format&fit=crop', // Grand luxury hotel facade
+  'https://images.unsplash.com/photo-1571896349842-33c89424de2d?q=80&w=1200&auto=format&fit=crop', // Boutique resort with lounge
+  'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?q=80&w=1200&auto=format&fit=crop', // Seaside tropical villa
+  'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?q=80&w=1200&auto=format&fit=crop', // Modern city hotel lobby
+  'https://images.unsplash.com/photo-1445019980597-93fa8acb246c?q=80&w=1200&auto=format&fit=crop', // Cozy heritage homestay
+  'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?q=80&w=1200&auto=format&fit=crop', // Minimalist premium suite
 ];
 
 const SPECIFIC_KEYWORD_MAP = [
@@ -57,8 +68,6 @@ export function getDestinationImage(destination = '') {
 
 /**
  * Returns a UNIQUE, distinct landmark image for every place.
- * Evaluates place keywords first, then uses a hash on the place name
- * so that adjacent places NEVER repeat the exact same image.
  */
 export function getPlacePhoto(place = {}, destination = '', index = 0) {
   if (place.imageUrl && place.imageUrl.trim().startsWith('http')) {
@@ -69,14 +78,12 @@ export function getPlacePhoto(place = {}, destination = '', index = 0) {
   const descStr = (place.description || '').toLowerCase();
   const fullText = `${nameStr} ${descStr}`;
 
-  // 1. Check specific keywords in the place name (e.g. Baoli vs Memorial vs Fort)
   for (const item of SPECIFIC_KEYWORD_MAP) {
     if (item.keywords.some(kw => fullText.includes(kw))) {
       return item.url;
     }
   }
 
-  // 2. Generate a unique hash based on the place name + index
   let hash = 0;
   for (let i = 0; i < nameStr.length; i++) {
     hash = (hash << 5) - hash + nameStr.charCodeAt(i);
@@ -84,6 +91,24 @@ export function getPlacePhoto(place = {}, destination = '', index = 0) {
   }
   const uniqueIndex = Math.abs(hash + index) % LANDMARK_COLLECTION.length;
   return LANDMARK_COLLECTION[uniqueIndex];
+}
+
+/**
+ * Returns a UNIQUE, high-resolution hotel/stay image.
+ */
+export function getHotelPhoto(hotel = {}, index = 0) {
+  if (hotel.imageUrl && hotel.imageUrl.trim().startsWith('http')) {
+    return hotel.imageUrl;
+  }
+
+  const nameStr = (hotel.name || '').toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < nameStr.length; i++) {
+    hash = (hash << 5) - hash + nameStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const uniqueIndex = Math.abs(hash + index) % HOTEL_COLLECTION.length;
+  return HOTEL_COLLECTION[uniqueIndex];
 }
 
 export { FALLBACK as DEFAULT_TRAVEL_IMAGE };

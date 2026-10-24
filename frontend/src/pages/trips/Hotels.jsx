@@ -9,6 +9,7 @@ import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 import Reveal from '../../components/animations/Reveal';
 import { motion } from 'framer-motion';
+import { getHotelPhoto } from '../../utils/destinationImages';
 
 export default function Hotels() {
   const { trip } = useTrip();
@@ -162,16 +163,44 @@ export default function Hotels() {
             </div>
           </div>
           
-          <div className="w-full md:w-80 flex gap-2">
+          <div className="w-full md:w-80 flex flex-col relative z-20">
             <div className="relative flex-1">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <Input 
                 placeholder="Filter hotels or resort..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-bg border-muted/30"
+                className="pl-10 bg-bg border-muted/30 w-full"
               />
             </div>
+            {/* Auto Suggestions dropdown */}
+            {search.trim().length > 1 && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-56 overflow-y-auto divide-y divide-slate-100 backdrop-blur-md">
+                {hotels
+                  .filter(h => h.name?.toLowerCase().includes(search.toLowerCase()))
+                  .slice(0, 5)
+                  .map((h, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSearch(h.name);
+                        handleSelectHotel(h);
+                      }}
+                      className="w-full text-left p-2.5 hover:bg-teal/10 rounded-xl transition-colors flex items-center justify-between text-xs group"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="font-bold text-slate-800 truncate group-hover:text-teal">{h.name}</p>
+                        <span className="text-[10px] text-slate-500">{h.hotelType || 'Stay'} • {h.rating ? `★ ${h.rating.toFixed(1)}` : 'Map-listed'}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-teal shrink-0">View &gt;</span>
+                    </button>
+                  ))}
+                {hotels.filter(h => h.name?.toLowerCase().includes(search.toLowerCase())).length === 0 && (
+                  <p className="p-3 text-xs text-slate-400 text-center">No matching stays found</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </Reveal>
@@ -313,17 +342,13 @@ export default function Hotels() {
             {filteredHotels.map((hotel, i) => (
             <Reveal key={hotel.id || i} delay={0.05 + i * 0.05}>
               <Card hoverLift className="p-0 overflow-hidden flex flex-col group border-muted/30 hover:border-teal/30 shadow-sm h-full card-travel">
-                <div className="h-52 relative overflow-hidden bg-gradient-to-br from-teal/20 via-sky/10 to-teal/5 flex items-center justify-center">
-                  {hotel.imageUrl ? (
-                    <img src={hotel.imageUrl} alt={hotel.name} onError={(e) => { e.currentTarget.hidden = true; }} className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100" />
-                  ) : (
-                    <div className="p-8 text-center flex flex-col items-center gap-2">
-                      <div className="w-14 h-14 rounded-2xl bg-teal/10 text-teal flex items-center justify-center border border-teal/20">
-                        <Building2 className="w-7 h-7" />
-                      </div>
-                      <span className="text-xs font-semibold text-teal/80">Map-listed accommodation</span>
-                    </div>
-                  )}
+                <div className="h-52 relative overflow-hidden bg-slate-900 flex items-center justify-center">
+                  <img 
+                    src={getHotelPhoto(hotel, i)} 
+                    alt={hotel.name} 
+                    className="w-full h-full object-cover zoom-target opacity-90 group-hover:opacity-100 transition-all duration-500 group-hover:scale-105" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
                   <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 items-center">
                     <span className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-bold text-charcoal border border-white/40 uppercase tracking-wider shadow-sm">

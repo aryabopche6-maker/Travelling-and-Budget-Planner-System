@@ -187,16 +187,44 @@ export default function Places() {
             </div>
           </div>
           
-          <div className="w-full md:w-80 flex gap-2">
+          <div className="w-full md:w-80 flex flex-col relative z-20">
             <div className="relative flex-1">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <Input 
                 placeholder="Filter attractions or name..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-bg border-muted/30"
+                className="pl-10 bg-bg border-muted/30 w-full"
               />
             </div>
+            {/* Auto Suggestions dropdown */}
+            {search.trim().length > 1 && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl p-2 max-h-56 overflow-y-auto divide-y divide-slate-100 backdrop-blur-md">
+                {places
+                  .filter(p => p.name?.toLowerCase().includes(search.toLowerCase()))
+                  .slice(0, 5)
+                  .map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSearch(p.name);
+                        setSelectedPlace(p);
+                      }}
+                      className="w-full text-left p-2.5 hover:bg-teal/10 rounded-xl transition-colors flex items-center justify-between text-xs group"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="font-bold text-slate-800 truncate group-hover:text-teal">{p.name}</p>
+                        <span className="text-[10px] text-slate-500">{p.category || 'Sightseeing'}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-teal shrink-0">Select &gt;</span>
+                    </button>
+                  ))}
+                {places.filter(p => p.name?.toLowerCase().includes(search.toLowerCase())).length === 0 && (
+                  <p className="p-3 text-xs text-slate-400 text-center">No matching attractions</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </Reveal>
