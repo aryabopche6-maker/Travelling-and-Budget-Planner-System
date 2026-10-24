@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+const defaultBaseUrl = import.meta.env.VITE_API_BASE_URL 
+  || (import.meta.env.PROD 
+      ? 'https://travelling-and-budget-planner-system.onrender.com/api' 
+      : 'http://localhost:8081/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api',
+  baseURL: defaultBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
