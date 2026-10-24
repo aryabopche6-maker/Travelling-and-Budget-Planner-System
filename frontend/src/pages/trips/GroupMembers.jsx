@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useTrip } from '../../context/TripContext';
-import { Users, UserMinus, Shield, Crown, Clock, X, Copy, Check, MessageCircle, RefreshCw, Link2 } from 'lucide-react';
+import { Users, Mail, UserMinus, Shield, Crown, Clock, X, Copy, Check, MessageCircle, RefreshCw } from 'lucide-react';
 import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tripService } from '../../services/tripService';
+import { invitationService } from '../../services/invitationService';
 import PageTransition from '../../components/common/PageTransition';
 import Card from '../../components/common/Card';
 
 export default function GroupMembers() {
   const { trip, isTripAdmin } = useTrip();
+  const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [invitations, setInvitations] = useState([]);
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
@@ -16,9 +19,12 @@ export default function GroupMembers() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [latestInviteLink, setLatestInviteLink] = useState('');
+  const [latestInviteEmail, setLatestInviteEmail] = useState('');
+  const [latestEmailSent, setLatestEmailSent] = useState(null);
   // Tracks which invitation id had its link copied
   const [copiedId, setCopiedId] = useState(null);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [resendingId, setResendingId] = useState(null);
 
   const [cancellingId, setCancellingId] = useState(null);
   const [removingMemberId, setRemovingMemberId] = useState(null);
@@ -42,25 +48,32 @@ export default function GroupMembers() {
     }
   };
 
-  const handleCreateInviteLink = async () => {
+  const handleInvite = async (event) => {
+    event.preventDefault();
+    const email = inviteEmail.trim();
+    if (!email) return;
+
     setSuccessMsg('');
     setErrorMsg('');
     setLatestInviteLink('');
+    setLatestInviteEmail('');
+    setLatestEmailSent(null);
     try {
       setIsInviting(true);
-      const result = await tripService.createInviteLink(trip.id);
-      const inv = result?.data || result;
-      if (inv?.acceptUrl) {
-        setLatestInviteLink(inv.acceptUrl);
-        setSuccessMsg('Invite link is ready. Share it with your friend; they can sign in or create an account to join.');
-      } else {
-        throw new Error('The server did not return an invitation link. Please try again.');
-      }
+      const result = await tripService.inviteMember(trip.id, email);
+      const invitation = result?.data || result;
+      setLatestInviteEmail(invitation?.invitedEmail || email);
+      setLatestEmailSent(invitation?.emailSent === true);
+      setLatestInviteLink(invitation?.acceptUrl || '');
+      setSuccessMsg(invitation?.emailSent
+        ? `Invitation email sent successfully to ${email}.`
+        : `Invitation was created for ${email}, but the email could not be delivered. Share the link below instead.`);
+      setInviteEmail('');
       await loadInvitations();
       setTimeout(() => setSuccessMsg(''), 15000);
     } catch (error) {
-      console.error('Failed to create invite link', error);
-      setErrorMsg(error.response?.data?.message || error.message || 'Failed to create invite link.');
+      console.error('Failed to send invite', error);
+      setErrorMsg(error.response?.data?.message || 'Failed to send invitation.');
       setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setIsInviting(false);
@@ -72,7 +85,7 @@ export default function GroupMembers() {
       setCancellingId(invitationId);
       setErrorMsg('');
       await tripService.deleteInvitation(trip.id, invitationId);
-      setSuccessMsg(`Invite link for ${email || 'member'} was successfully revoked.`);
+      setSuccessMsg(`Invitation for ${email || 'member'} was successfully cancelled.`);
       setTimeout(() => setSuccessMsg(''), 5000);
       await loadInvitations();
     } catch (error) {
@@ -93,6 +106,8 @@ export default function GroupMembers() {
       if (!inv?.acceptUrl) {
         throw new Error('The server did not return an invitation link. Please try again.');
       }
+      setLatestInviteEmail('');
+      setLatestEmailSent(null);
       setLatestInviteLink(inv.acceptUrl);
       setSuccessMsg('A new invite link is ready to copy or share.');
       setTimeout(() => setSuccessMsg(''), 8000);
@@ -103,6 +118,29 @@ export default function GroupMembers() {
       setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setRefreshingId(null);
+    }
+  };
+
+  const handleResendInvite = async (invitationId, email) => {
+    try {
+      setResendingId(invitationId);
+      setErrorMsg('');
+      const result = await invitationService.resendInvitation(trip.id, invitationId);
+      const invitation = result?.data || result;
+      setLatestInviteEmail(invitation?.invitedEmail || email);
+      setLatestEmailSent(invitation?.emailSent === true);
+      setLatestInviteLink(invitation?.acceptUrl || '');
+      setSuccessMsg(invitation?.emailSent
+        ? `Invitation email resent successfully to ${email}.`
+        : `Invitation was recreated for ${email}, but the email could not be delivered. Share the new link below instead.`);
+      setTimeout(() => setSuccessMsg(''), 15000);
+      await loadInvitations();
+    } catch (error) {
+      console.error('Failed to resend invitation', error);
+      setErrorMsg(error.response?.data?.message || 'Failed to resend invitation.');
+      setTimeout(() => setErrorMsg(''), 5000);
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -171,22 +209,32 @@ export default function GroupMembers() {
         </div>
       </div>
 
-      {/* Shareable invite link — Admin Only */}
+      {/* Invite by email — Admin Only */}
       {isTripAdmin && (
         <Card className="p-6 md:p-8 bg-coral/5 border-coral/30 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <Crown className="w-5 h-5 text-coral" />
-            <h3 className="text-xl font-bold text-charcoal tracking-tight">Add a Trip Member</h3>
+            <h3 className="text-xl font-bold text-charcoal tracking-tight">Invite New Member</h3>
           </div>
-          <p className="text-sm text-muted mb-5">
-            Generate a secure invite link, then copy it or send it through WhatsApp. Anyone with the link can join this trip after signing in.
-          </p>
-          <Button type="button" isLoading={isInviting} onClick={handleCreateInviteLink} className="gap-2 bg-coral hover:bg-coral/90 shadow-lg shadow-coral/20 text-white">
-            <Link2 className="w-4 h-4" /> Generate Invite Link
-          </Button>
-          <p className="mt-3 text-xs text-muted">
-            Links expire after 7 days. A localhost link only works on your computer; to share with friends, configure the frontend's public URL.
-          </p>
+          <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-sm font-medium text-muted mb-2 uppercase tracking-wider">Email Address</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                <Input
+                  type="email"
+                  required
+                  placeholder="friend@example.com"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  className="pl-9 bg-white border-coral/20 focus:border-coral text-charcoal"
+                />
+              </div>
+            </div>
+            <Button type="submit" isLoading={isInviting} className="w-full sm:w-auto gap-2 bg-coral hover:bg-coral/90 shadow-lg shadow-coral/20 text-white">
+              <Mail className="w-4 h-4" /> Send Invite
+            </Button>
+          </form>
 
           {/* Success + Link Share Box */}
           <AnimatePresence>
@@ -195,12 +243,14 @@ export default function GroupMembers() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="mt-4 p-4 rounded-xl space-y-3 bg-teal/10 border border-teal/20"
+                className={`mt-4 p-4 rounded-xl space-y-3 border ${latestEmailSent === false ? 'bg-amber-500/10 border-amber-500/20' : 'bg-teal/10 border-teal/20'}`}
               >
-                <p className="text-teal text-sm font-medium">✅ {successMsg}</p>
+                <p className={`text-sm font-medium ${latestEmailSent === false ? 'text-amber-700' : 'text-teal'}`}>
+                  {latestEmailSent === false ? '⚠️' : '✅'} {successMsg}
+                </p>
                 {latestInviteLink && (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted font-semibold uppercase tracking-wider">📎 Share this invite link:</p>
+                    <p className="text-xs text-muted font-semibold uppercase tracking-wider">📎 Share this link directly with {latestInviteEmail}:</p>
                     <div className="flex items-center gap-2 bg-white border border-teal/20 rounded-lg p-2">
                       <p className="text-xs text-charcoal flex-1 truncate font-mono">{latestInviteLink}</p>
                     </div>
@@ -217,7 +267,7 @@ export default function GroupMembers() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => shareWhatsApp(latestInviteLink)}
+                        onClick={() => shareWhatsApp(latestInviteLink, latestInviteEmail)}
                         className="gap-2 border-green-500/30 text-green-600 hover:bg-green-500/10"
                       >
                         <MessageCircle className="w-3.5 h-3.5" /> Share via WhatsApp
@@ -311,13 +361,13 @@ export default function GroupMembers() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-bold text-charcoal truncate">
-                      {isShareableLink ? 'Shareable invite link' : `Legacy email invite: ${invitation.invitedEmail}`}
+                      {invitation.invitedEmail || 'Shareable invite link'}
                     </p>
                     <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${getStatusColor(invitation.status)}`}>
                       {invitation.status}
                     </span>
                     {!isShareableLink && invitation.status === 'PENDING' && (
-                      <p className="mt-1 text-xs text-muted">This older invite is email-restricted. Revoke it and generate a shareable link instead.</p>
+                      <p className="mt-1 text-xs text-muted">Only this email address can accept the invitation.</p>
                     )}
                   </div>
                 </div>
@@ -325,7 +375,7 @@ export default function GroupMembers() {
                 {/* Actions */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* Copy invite link */}
-                  {isShareableLink && invitation.acceptUrl && invitation.status === 'PENDING' && (
+                  {invitation.acceptUrl && invitation.status === 'PENDING' && (
                     <>
                       <Button
                         size="sm"
@@ -347,7 +397,19 @@ export default function GroupMembers() {
                     </>
                   )}
 
-                  {(invitation.status === 'EXPIRED' || invitation.status === 'CANCELLED') && (
+                  {(invitation.status === 'EXPIRED' || invitation.status === 'CANCELLED') && !isShareableLink && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      isLoading={resendingId === invitation.id}
+                      onClick={() => handleResendInvite(invitation.id, invitation.invitedEmail)}
+                      className="gap-1.5 border-teal/30 text-teal hover:bg-teal/10 text-xs"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Resend
+                    </Button>
+                  )}
+
+                  {(invitation.status === 'EXPIRED' || invitation.status === 'CANCELLED') && isShareableLink && (
                     <Button
                       size="sm"
                       variant="outline"

@@ -60,9 +60,13 @@ $env:PLACES_API_KEY="your_geoapify_key"
 $env:AMADEUS_CLIENT_ID="your_amadeus_client_id"
 $env:AMADEUS_CLIENT_SECRET="your_amadeus_client_secret"
 $env:FRONTEND_URL="https://your-deployed-app.example"
+$env:MAIL_HOST="smtp.gmail.com"
+$env:MAIL_PORT="587"
+$env:MAIL_USERNAME="your_sender@gmail.com"
+$env:MAIL_PASSWORD="your_smtp_or_app_password"
 mvn spring-boot:run
 ```
-`FRONTEND_URL` defaults to the deployed WanderPlan frontend and is used for shareable invitation links. No SMTP setup is needed for this flow. Generate and share invites from the deployed app so the invitation token is stored in the same public backend database that your friend's browser uses.
+Email invitations require SMTP configuration. For Gmail, use an app password rather than your account password. If SMTP is unavailable, the invitation is still created and the response includes `emailSent: false` and an acceptance link that the trip admin can share manually. `FRONTEND_URL` is used to build invitation acceptance links; use the deployed frontend URL when inviting people to a deployed backend.
 SOS does not use a paid SMS gateway. It prepares an SMS message on the device; the user must open their SMS app and press Send. Normal mobile-carrier SMS charges may apply. The database records the contact and that manual confirmation is pending; the application cannot verify whether the user ultimately sent the message or whether it was delivered.
 
 ---
@@ -83,13 +87,15 @@ SOS does not use a paid SMS gateway. It prepares an SMS message on the device; t
 - `POST /api/trips` — Create trip (`isTripAdmin` assigned)
 - `GET /api/trips` — List user's trips
 - `GET /api/trips/{tripId}` — Trip overview
+- `POST /api/trips/{tripId}/invitations` — Invite a member by email (Admin only; sends an email when SMTP is configured)
+- `POST /api/trips/{tripId}/invitations/{invitationId}/resend` — Create a fresh email invitation for an expired or cancelled email invite (Admin only)
 - `POST /api/trips/{tripId}/invitations/link` — Create or retrieve a shareable trip invite link (Admin only; link holders can join after signing in)
 - `POST /api/trips/{tripId}/invitations/{invitationId}/link` — Replace an expired or cancelled invite with a new shareable link (Admin only)
-- `GET /api/trips/{tripId}/invitations` — View pending invitations (Admin only)
+- `GET /api/trips/{tripId}/invitations` — View trip invitations (Admin only)
 - `DELETE /api/trips/{tripId}/invitations/{id}` — Cancel invitation
 - `GET /api/invitations/verify?token={token}` — Verify an invitation token
-- `POST /api/invitations/accept?token={token}` — Accept invitation (email match for legacy email-targeted invites; link invitations accept the authenticated account)
-- `POST /api/invitations/decline?token={token}` — Decline invitation
+- `POST /api/invitations/accept?token={token}` — Accept invitation (email-targeted invites require the invited email account; shareable links accept the authenticated account)
+- `POST /api/invitations/decline?token={token}` — Decline an email invitation
 
 ### 💰 Budget, Simulator & Rescue
 - `GET /api/trips/{tripId}/budget` — Budget breakdown

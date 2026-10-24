@@ -186,6 +186,9 @@ public class InvitationService {
         if (!oldInvitation.getTrip().getId().equals(tripId)) {
             throw new BadRequestException("Invitation does not belong to this trip");
         }
+        if (oldInvitation.getInvitedEmail() == null || oldInvitation.getInvitedEmail().isBlank()) {
+            throw new BadRequestException("Shareable invitations must be refreshed using the link endpoint.");
+        }
 
         // Mark old invitation as cancelled
         oldInvitation.setStatus(InvitationStatus.CANCELLED);

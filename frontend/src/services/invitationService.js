@@ -21,5 +21,10 @@ export const invitationService = {
   deleteInvitation: async (tripId, invitationId) => {
     const response = await api.delete(`/trips/${tripId}/invitations/${invitationId}`);
     return response.data;
+  },
+
+  resendInvitation: async (tripId, invitationId) => {
+    const response = await api.post(`/trips/${tripId}/invitations/${invitationId}/resend`);
+    return response.data;
   }
 };
