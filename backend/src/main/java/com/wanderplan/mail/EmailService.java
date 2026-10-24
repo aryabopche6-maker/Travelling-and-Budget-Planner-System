@@ -12,6 +12,10 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 
 @Service
@@ -33,6 +37,10 @@ public class EmailService {
 
     @Value("${app.frontend.url:https://travelling-and-budget-planner-syste.vercel.app}")
     private String frontendUrl;
+
+    // Google Apps Script web app URL for HTTPS email fallback (set via env var or Render config)
+    @Value("${EMAIL_WEBHOOK_URL:}")
+    private String emailWebhookUrl;
 
     public boolean sendTripInvitationEmail(TripInvitation invitation) {
         Trip trip = invitation.getTrip();
@@ -60,25 +68,138 @@ public class EmailService {
                     ? System.getenv("MAIL_PASSWORD") 
                     : "xywkkpaedvrielbf");
 
-        log.info("Sending invitation email using sender username: {}", effectiveUsername);
+        String subject = "You're Invited! Join " + inviterName + " on a trip to " + destination;
+        String htmlBody = buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl);
 
-        // Try sending with Port 465 SSL first, if fails try Port 587 TLS
-        boolean sent = trySendViaPort(465, true, effectiveUsername, effectivePassword, toEmail, inviterName, destination, datesStr, acceptUrl, declineUrl);
+        log.info("Sending invitation email to {} using sender: {}", toEmail, effectiveUsername);
+
+        // Strategy 1: Try SMTP directly (works on localhost & non-restricted clouds)
+        boolean sent = trySendViaPort(465, true, effectiveUsername, effectivePassword, toEmail, subject, htmlBody);
         if (!sent) {
-            log.warn("Port 465 SSL failed, trying port 587 TLS as fallback...");
-            sent = trySendViaPort(587, false, effectiveUsername, effectivePassword, toEmail, inviterName, destination, datesStr, acceptUrl, declineUrl);
+            log.warn("Port 465 SSL failed, trying port 587 TLS...");
+            sent = trySendViaPort(587, false, effectiveUsername, effectivePassword, toEmail, subject, htmlBody);
+        }
+
+        // Strategy 2: If SMTP fails (cloud ports blocked), use Google Apps Script HTTPS webhook
+        if (!sent) {
+            log.warn("All SMTP ports failed (likely blocked by cloud host). Trying HTTPS webhook fallback...");
+            sent = trySendViaWebhook(toEmail, subject, htmlBody);
         }
 
         if (sent) {
             log.info("Invitation email sent successfully to {} for invitation {}", toEmail, invitation.getId());
         } else {
-            log.error("All SMTP attempts failed for invitation {}", invitation.getId());
+            log.error("All email methods failed for invitation {} to {}", invitation.getId(), toEmail);
         }
         return sent;
     }
 
+    /**
+     * Send email via Google Apps Script HTTPS webhook.
+     * This bypasses SMTP port restrictions on cloud platforms like Render.
+     * Uses standard HTTPS (port 443) which is NEVER blocked.
+     */
+    private boolean trySendViaWebhook(String toEmail, String subject, String htmlBody) {
+        // Check for webhook URL from env var or @Value
+        String webhookUrl = (emailWebhookUrl != null && !emailWebhookUrl.isBlank()) 
+                ? emailWebhookUrl 
+                : System.getenv("EMAIL_WEBHOOK_URL");
+
+        if (webhookUrl == null || webhookUrl.isBlank()) {
+            log.error("No EMAIL_WEBHOOK_URL configured. Cannot send via HTTPS webhook.");
+            return false;
+        }
+
+        try {
+            // Build JSON payload
+            String jsonPayload = String.format(
+                "{\"to\":\"%s\",\"subject\":\"%s\",\"htmlBody\":\"%s\"}",
+                escapeJson(toEmail),
+                escapeJson(subject),
+                escapeJson(htmlBody)
+            );
+
+            log.info("Sending email via HTTPS webhook to: {}", toEmail);
+
+            URL url = new URL(webhookUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            // Follow redirects (Apps Script returns 302 redirect)
+            conn.setInstanceFollowRedirects(false);
+
+            // Write the payload
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
+                os.flush();
+            }
+
+            int responseCode = conn.getResponseCode();
+
+            // Google Apps Script returns 302 redirect on POST - we need to follow it
+            if (responseCode == 302 || responseCode == 301) {
+                String redirectUrl = conn.getHeaderField("Location");
+                if (redirectUrl != null) {
+                    log.info("Following Apps Script redirect...");
+                    conn.disconnect();
+                    URL rUrl = new URL(redirectUrl);
+                    HttpURLConnection rConn = (HttpURLConnection) rUrl.openConnection();
+                    rConn.setRequestMethod("POST");
+                    rConn.setRequestProperty("Content-Type", "application/json");
+                    rConn.setDoOutput(true);
+                    rConn.setConnectTimeout(15000);
+                    rConn.setReadTimeout(15000);
+
+                    try (OutputStream os = rConn.getOutputStream()) {
+                        os.write(jsonPayload.getBytes(StandardCharsets.UTF_8));
+                        os.flush();
+                    }
+
+                    responseCode = rConn.getResponseCode();
+                    String responseBody = new String(
+                        (responseCode >= 200 && responseCode < 400) 
+                            ? rConn.getInputStream().readAllBytes() 
+                            : rConn.getErrorStream().readAllBytes(),
+                        StandardCharsets.UTF_8
+                    );
+                    rConn.disconnect();
+                    log.info("Webhook redirect response: {} - {}", responseCode, responseBody);
+                    return responseBody.contains("\"success\":true") || responseCode == 200;
+                }
+            }
+
+            String responseBody = new String(
+                (responseCode >= 200 && responseCode < 400) 
+                    ? conn.getInputStream().readAllBytes() 
+                    : conn.getErrorStream().readAllBytes(),
+                StandardCharsets.UTF_8
+            );
+            conn.disconnect();
+
+            log.info("Webhook response: {} - {}", responseCode, responseBody);
+            return responseBody.contains("\"success\":true") || responseCode == 200;
+
+        } catch (Exception e) {
+            log.error("HTTPS webhook email sending failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private String escapeJson(String text) {
+        if (text == null) return "";
+        return text
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t");
+    }
+
     private boolean trySendViaPort(int port, boolean ssl, String username, String password, String toEmail, 
-                                   String inviterName, String destination, String datesStr, String acceptUrl, String declineUrl) {
+                                   String subject, String htmlBody) {
         try {
             org.springframework.mail.javamail.JavaMailSenderImpl directSender = new org.springframework.mail.javamail.JavaMailSenderImpl();
             directSender.setHost("smtp.gmail.com");
@@ -106,8 +227,8 @@ public class EmailService {
 
             helper.setFrom(username.trim(), "WanderPlan Travel Planner");
             helper.setTo(toEmail);
-            helper.setSubject("You're Invited! Join " + inviterName + " on a trip to " + destination);
-            helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true);
 
             directSender.send(message);
             return true;
