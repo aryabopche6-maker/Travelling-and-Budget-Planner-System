@@ -55,23 +55,38 @@ public class EmailService {
                 ? mailPassword 
                 : System.getenv("MAIL_PASSWORD");
 
-        if (mailSender == null || effectiveUsername == null || effectiveUsername.isBlank()
+        if (effectiveUsername == null || effectiveUsername.isBlank()
                 || effectivePassword == null || effectivePassword.isBlank()) {
             log.error("Invitation email was not sent because SMTP is not configured. Set MAIL_USERNAME and MAIL_PASSWORD.");
             return false;
         }
 
         try {
-            MimeMessage message = mailSender.createMimeMessage();
+            org.springframework.mail.javamail.JavaMailSenderImpl directSender = new org.springframework.mail.javamail.JavaMailSenderImpl();
+            directSender.setHost("smtp.gmail.com");
+            directSender.setPort(465);
+            directSender.setUsername(effectiveUsername.trim());
+            directSender.setPassword(effectivePassword.trim().replaceAll("\\s+", ""));
+
+            java.util.Properties props = directSender.getJavaMailProperties();
+            props.put("mail.transport.protocol", "smtp");
+            props.put("mail.smtp.auth", "true");
+            props.put("mail.smtp.ssl.enable", "true");
+            props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+            props.put("mail.smtp.connectiontimeout", "10000");
+            props.put("mail.smtp.timeout", "10000");
+            props.put("mail.smtp.writetimeout", "10000");
+
+            MimeMessage message = directSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(effectiveUsername, "WanderPlan Travel Planner");
+            helper.setFrom(effectiveUsername.trim(), "WanderPlan Travel Planner");
             helper.setTo(toEmail);
             helper.setSubject("You're Invited! Join " + inviterName + " on a trip to " + destination);
             helper.setText(buildHtmlEmailContent(inviterName, destination, datesStr, acceptUrl, declineUrl), true);
 
-            mailSender.send(message);
-            log.info("Invitation email accepted by SMTP for invitation {}", invitation.getId());
+            directSender.send(message);
+            log.info("Invitation email sent successfully via SMTP for invitation {}", invitation.getId());
             return true;
         } catch (Exception e) {
             log.error("SMTP invitation delivery failed for invitation {}", invitation.getId(), e);
